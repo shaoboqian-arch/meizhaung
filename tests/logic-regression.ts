@@ -6,6 +6,8 @@ import { matchIngredientText } from "../src/data/ingredientMatcher";
 import { buildRoutineRecommendation, getConcernCandidateProducts } from "../src/data/recommender";
 import { mergeRoutineSnapshots, type RoutineSnapshot } from "../src/data/routineMerge";
 import {
+  getUngroupedAnalysisForDisplay,
+  groupAnalysisForDisplay,
   shouldCollapseAnalysisDetail,
   shouldCollapseCoverageReason,
   shouldCollapseRecommendationReason,
@@ -263,14 +265,32 @@ assert.equal(
 );
 const displayAnalysis: AnalysisResult[] = [
   { type: "\u4e92\u76f8\u914d\u5408", title: "pair", detail: "pair", productIds: [] },
-  { type: "\u4e92\u76f8\u514b\u5236", title: "conflict", detail: "conflict", productIds: [] }
+  { type: "\u4e92\u76f8\u914d\u5408", title: "pair-two", detail: "pair-two", productIds: [] },
+  { type: "\u4e92\u76f8\u514b\u5236", title: "conflict", detail: "conflict", productIds: [] },
+  { type: "\u4e92\u76f8\u62b5\u6d88", title: "cancel", detail: "cancel", productIds: [] },
+  { type: "\u4fe1\u606f\u4e0d\u8db3", title: "missing", detail: "missing", productIds: [] }
 ];
 assert.equal(
   sortAnalysisForDisplay(displayAnalysis)[0].type,
   "\u4e92\u76f8\u514b\u5236",
   "Plain-language analysis did not sort conflicts first"
 );
+const analysisGroups = groupAnalysisForDisplay(displayAnalysis);
+assert.deepEqual(
+  analysisGroups.map((group) => ({ label: group.label, titles: group.items.map((item) => item.title) })),
+  [
+    { label: "\u4e92\u76f8\u514b\u5236", titles: ["conflict", "cancel"] },
+    { label: "\u4e92\u76f8\u914d\u5408", titles: ["pair", "pair-two"] }
+  ],
+  "Plain-language analysis did not group conflict and cooperation separately"
+);
+assert.deepEqual(
+  getUngroupedAnalysisForDisplay(displayAnalysis).map((item) => item.title),
+  ["missing"],
+  "Plain-language analysis should keep non-relationship states separate"
+);
 assert.ok(shouldCollapseRecommendationReason(cleanser.id, [cleanser.id]));
 assert.ok(shouldCollapseCoverageReason(displayCoverage[0]));
 assert.ok(shouldCollapseAnalysisDetail(displayAnalysis[0]));
+assert.ok(shouldCollapseAnalysisDetail(displayAnalysis[2]));
 console.log("Backport regression passed.");

@@ -20,10 +20,11 @@ import { enrichIngredientRisk } from "./data/ingredientRisk";
 import { buildRoutineRecommendation } from "./data/recommender";
 import { isSupportedOcrImage, recognizeIngredientImage } from "./features/localOcr";
 import {
+  getUngroupedAnalysisForDisplay,
+  groupAnalysisForDisplay,
   shouldCollapseAnalysisDetail,
   shouldCollapseCoverageReason,
   shouldCollapseRecommendationReason,
-  sortAnalysisForDisplay,
   sortConcernCoverageForDisplay,
   sortRecommendedProductsForDisplay
 } from "./features/recommendationPresentation";
@@ -492,7 +493,8 @@ function App() {
     .map((id) => allProducts.find((product) => product.id === id))
     .filter((product): product is Product => Boolean(product)), selectedIds);
   const analysis = analyzeRoutine(selectedProducts, ingredientsWithRisk, recommendation?.standaloneProductIds ?? [], skinConcerns);
-  const sortedAnalysis = sortAnalysisForDisplay(analysis);
+  const analysisGroups = groupAnalysisForDisplay(analysis);
+  const ungroupedAnalysis = getUngroupedAnalysisForDisplay(analysis);
   const sortedConcernCoverage = sortConcernCoverageForDisplay(recommendation?.concernCoverage ?? []);
   const getSelectedCountByCategory = (category: ProductCategory) =>
     allProducts.filter((product) => product.category === category && selectedIds.includes(product.id)).length;
@@ -1243,10 +1245,26 @@ function App() {
             <section className="panel">
               <div className="section-title">
                 <h2>白话分析</h2>
-                <span>{sortedAnalysis.length} 条结果</span>
+                <span>{analysis.length} 条结果</span>
               </div>
               <div className="analysis-list">
-                {sortedAnalysis.map((item) => (
+                {analysisGroups.map((group) => (
+                  <article className={`analysis-card analysis-group ${group.id}`} key={group.id}>
+                    <span>{group.label}</span>
+                    <ul className="analysis-group-list">
+                      {group.items.map((item) => <li key={`${item.type}-${item.title}`}>{item.title}</li>)}
+                    </ul>
+                    <details className="explanation-details">
+                      <summary>查看分析说明</summary>
+                      <div className="analysis-detail-list">
+                        {group.items.map((item) => (
+                          <p key={`${item.type}-${item.title}`}><strong>{item.title}</strong>{item.detail}</p>
+                        ))}
+                      </div>
+                    </details>
+                  </article>
+                ))}
+                {ungroupedAnalysis.map((item) => (
                   <article className={`analysis-card ${item.type}`} key={`${item.type}-${item.title}`}>
                     <span>{item.type}</span>
                     <h3>{item.title}</h3>

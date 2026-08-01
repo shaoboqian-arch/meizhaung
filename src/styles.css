@@ -1177,6 +1177,37 @@ h2 {
   border-left-color: var(--bad);
 }
 
+.analysis-card.analysis-group.conflict {
+  border-left-color: var(--warn);
+}
+
+.analysis-card.analysis-group.cooperation {
+  border-left-color: var(--ok);
+}
+
+.analysis-group-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink);
+  line-height: 1.55;
+}
+
+.analysis-group-list li::marker {
+  color: var(--accent);
+}
+
+.analysis-detail-list p + p {
+  margin-top: 10px;
+}
+
+.analysis-detail-list strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+}
+
 @media (max-width: 900px) {
   body {
     min-width: 0;
