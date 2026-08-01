@@ -1,0 +1,16 @@
+{
+  "$schema": "https://static.cloudbase.net/cli/cloudbaserc.schema.json",
+  "envId": "qianshaobo-d3gjx8wkh621904d1",
+  "functionRoot": "cloudfunctions",
+  "functions": [
+    {
+      "name": "meizhaung-sync",
+      "runtime": "Nodejs20.19",
+      "handler": "index.main",
+      "memorySize": 256,
+      "timeout": 20,
+      "installDependency": true,
+      "description": "Beauty routine combination synchronization service"
+    }
+  ]
+}

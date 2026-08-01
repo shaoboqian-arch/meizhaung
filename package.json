@@ -1,0 +1,50 @@
+{
+  "name": "beauty-ingredient-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:pages": "powershell -NoProfile -Command \"$env:GITHUB_PAGES='true'; npm run build\"",
+    "deploy:pages": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-github.ps1",
+    "test:logic": "esbuild tests/logic-regression.ts --bundle --platform=node --format=cjs --outfile=output/tests/logic-regression.cjs && node output/tests/logic-regression.cjs",
+    "test:usability": "node scripts/web-usability-audit.mjs",
+    "preview": "vite preview",
+    "ios:init": "npm run build && npx cap add ios",
+    "ios:sync": "npm run build && npx cap sync ios",
+    "ios:open": "npx cap open ios",
+    "mp:dev": "cd mp-weixin && taro build --type weapp && node scripts/fix-custom-wrapper.cjs && taro build --type weapp --watch",
+    "mp:build": "cd mp-weixin && taro build --type weapp && node scripts/fix-custom-wrapper.cjs"
+  },
+  "dependencies": {
+    "@capacitor/core": "6.2.1",
+    "@capacitor/ios": "6.2.1",
+    "lucide-react": "^0.468.0",
+    "lxgw-wenkai-screen-webfont": "^1.7.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tesseract.js": "7.0.0"
+  },
+  "devDependencies": {
+    "@babel/preset-react": "^7.27.1",
+    "@capacitor/cli": "6.2.1",
+    "@tarojs/cli": "^4.2.0",
+    "@tarojs/components": "^4.2.0",
+    "@tarojs/plugin-framework-react": "^4.2.0",
+    "@tarojs/plugin-platform-weapp": "^4.2.0",
+    "@tarojs/react": "^4.2.0",
+    "@tarojs/runtime": "^4.2.0",
+    "@tarojs/taro": "^4.2.0",
+    "@tarojs/webpack5-runner": "^4.2.0",
+    "@types/minimatch": "^5.1.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "babel-preset-taro": "^4.2.0",
+    "playwright": "^1.60.0",
+    "typescript": "~5.8.3",
+    "vite": "^5.4.21",
+    "webpack": "^5.99.9"
+  }
+}

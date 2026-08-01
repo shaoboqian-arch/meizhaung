@@ -1,0 +1,22 @@
+page {
+  background: #fbf6ef;
+  color: #322721;
+  font-family: "LXGW WenKai Screen R", "HarmonyOS Sans SC", "MiSans", "OPPO Sans", "vivo Sans", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+view,
+text,
+button,
+input,
+textarea,
+picker,
+image {
+  box-sizing: border-box;
+}
+
+button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  line-height: 1.35;
+}

@@ -1,0 +1,117 @@
+.selected-row,
+.category-row {
+  width: 100%;
+  min-height: 62px;
+  margin-bottom: 10px;
+  padding: 13px 14px;
+  border: 1px solid rgba(105, 72, 58, 0.12);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fffefb, #fff8f1);
+  color: #322721;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+}
+
+.selected-row.overlap {
+  border-color: rgba(232, 111, 92, 0.42);
+  background: linear-gradient(180deg, #fff4ec, #fffdf9);
+  box-shadow: 0 0 0 4px rgba(232, 111, 92, 0.08), 0 10px 22px rgba(116, 74, 52, 0.08);
+}
+
+.category-row {
+  font-size: 21px;
+}
+
+.category-row text:last-child {
+  color: #9a7a6d;
+}
+
+.reason,
+.advantage {
+  display: block;
+  margin-top: 10px;
+  color: #8b7469;
+  font-size: 19px;
+  line-height: 1.6;
+}
+
+.advantage {
+  padding: 13px;
+  border: 1px solid rgba(105, 72, 58, 0.12);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fffefb, #fff8f1);
+  box-shadow: 0 8px 18px rgba(116, 74, 52, 0.07);
+  animation: bFadeUp 0.48s ease both;
+}
+
+.sub-title {
+  margin-top: 18px;
+}
+
+.coverage-card {
+  margin-top: 10px;
+  padding: 13px;
+  border: 1px solid rgba(105, 72, 58, 0.12);
+  border-left: 5px solid #3aa987;
+  border-radius: 14px;
+  background: #fffdf9;
+}
+
+.coverage-card.推荐补入 {
+  border-left-color: #e86f5c;
+  background: #fff8f2;
+}
+
+.coverage-card.暂未覆盖 {
+  border-left-color: #c78a2c;
+}
+
+.coverage-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.candidate-count {
+  margin-left: auto;
+  color: #9a7a6d;
+  font-size: 17px;
+}
+
+.support-title {
+  padding-top: 4px;
+}
+
+.analysis-card {
+  border-left: 5px solid #9a7a6d;
+}
+
+.analysis-card.match {
+  border-left-color: #3aa987;
+}
+
+.analysis-card.caution {
+  border-left-color: #c78a2c;
+}
+
+.analysis-card.offset {
+  border-left-color: #d75c50;
+}
+
+.analysis-type {
+  display: block;
+  margin-bottom: 6px;
+  color: #9a7a6d;
+  font-size: 18px;
+  font-weight: 620;
+}
+
+.recommend-card .tag-row {
+  margin-top: 10px;
+}
+
+.recommend-card .reason {
+  padding-top: 2px;
+}
