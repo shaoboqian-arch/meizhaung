@@ -23,7 +23,7 @@ const getProducts = (ids: string[]) => ids
 
 const hardRelations = (items: Product[], standaloneIds: string[] = []) =>
   getMatchingIngredientRelations(items, ingredients, standaloneIds)
-    .filter((relation) => relation.type !== "互相配合");
+    .filter((relation) => relation.type === "互相抵消");
 
 const brandCount = (keyword: string) =>
   products.filter((product) => product.brand.toLowerCase().includes(keyword.toLowerCase())).length;
@@ -212,8 +212,8 @@ assert.ok(
   "Acid and retinol rule unexpectedly removed retinol"
 );
 assert.ok(
-  !cleanserAcidRetinolSerum.productIds.includes(acidProduct.id),
-  "Acid and retinol rule did not remove acid"
+  cleanserAcidRetinolSerum.productIds.includes(acidProduct.id),
+  "Acid and retinol combination silently removed the acid product"
 );
 assert.equal(
   new Set(cleanserAcidRetinolSerum.productIds).size,
@@ -226,12 +226,69 @@ assert.deepEqual(
   "Recommendation still contains a hard conflict"
 );
 assert.ok(
-  cleanserAcidRetinolSerum.advantages.some((advantage) => advantage.includes("\u5df2\u79fb\u9664\u9178\u7c7b")),
-  "Acid removal explanation is missing"
+  cleanserAcidRetinolSerum.advantages.some((advantage) => advantage.includes("\u5206\u665a\u4f7f\u7528")),
+  "Acid and retinol scheduling explanation is missing"
 );
 assert.ok(
-  cleanserAcidRetinolSerum.advantages.every((advantage) => !advantage.includes("\u62c6\u5f00\u4f7f\u7528")),
-  "Acid removal copy still claims split use"
+  cleanserAcidRetinolSerum.advantages.every((advantage) => !advantage.includes("\u5df2\u79fb\u9664\u9178\u7c7b")),
+  "Acid and retinol copy still claims that acid was removed"
+);
+
+const benzacProduct = products.find((product) => product.id === "benzac-ac");
+const ceraveRetinol = products.find((product) => product.id === "cerave-retinol");
+const repairCream = products.find((product) => product.id === "cerave-cream");
+assert.ok(benzacProduct, "Missing Benzac product");
+assert.ok(ceraveRetinol, "Missing CeraVe retinol product");
+assert.ok(repairCream, "Missing repair cream");
+const mutualRestraintRoutine = buildRoutineRecommendation(
+  [ceraveRetinol, benzacProduct, repairCream],
+  products,
+  ingredients,
+  []
+);
+assert.ok(mutualRestraintRoutine, "Mutual-restraint products did not produce a recommendation");
+for (const product of [ceraveRetinol, benzacProduct, repairCream]) {
+  assert.ok(
+    mutualRestraintRoutine.productIds.includes(product.id),
+    `Mutual restraint silently removed ${product.id}`
+  );
+}
+
+const compoundRetinolAcid: Product = {
+  id: "audit-retinol-acid-compound",
+  brand: "Audit",
+  model: "Retinol + Salicylic",
+  category: "精华",
+  ingredientIds: ["retinol", "salicylic-acid"],
+  notes: "Regression fixture"
+};
+const compoundRoutine = buildRoutineRecommendation(
+  [compoundRetinolAcid],
+  [...products, compoundRetinolAcid],
+  ingredients,
+  []
+);
+assert.ok(compoundRoutine, "Compound retinol and acid product did not produce a recommendation");
+assert.ok(compoundRoutine.productIds.includes(compoundRetinolAcid.id), "Compound product was unexpectedly removed");
+assert.ok(
+  compoundRoutine.advantages.every((advantage) => !advantage.includes("\u5df2\u79fb\u9664\u9178\u7c7b")),
+  "Compound product copy falsely claims that acid was removed"
+);
+
+const salicylicCleanser = products.find((product) => product.id === "cerave-sa-cleanser");
+assert.ok(salicylicCleanser, "Missing salicylic cleanser");
+const salicylicCleanserRoutine = buildRoutineRecommendation(
+  [salicylicCleanser, baseProduct],
+  products,
+  ingredients,
+  []
+);
+assert.ok(salicylicCleanserRoutine, "Salicylic cleanser did not produce a recommendation");
+assert.ok(salicylicCleanserRoutine.productIds.includes(cleanser.id), "Best cleanser did not replace salicylic cleanser");
+assert.ok(!salicylicCleanserRoutine.productIds.includes(salicylicCleanser.id), "Salicylic cleanser was not replaced");
+assert.ok(
+  salicylicCleanserRoutine.advantages.some((advantage) => advantage.includes("\u9178\u7c7b\u53bb\u89d2\u8d28\u529f\u80fd\u5df2\u66ff\u6362")),
+  "Salicylic cleanser replacement did not explain the acid-function change"
 );
 
 const matchedIngredientText = matchIngredientText(

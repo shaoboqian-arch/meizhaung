@@ -265,11 +265,9 @@ export const routineAdjustmentRules = [
   },
   {
     id: "separate-acid-retinoid",
-    action: "remove-tag-products",
+    action: "separate-tag-products",
     triggerTags: ["酸类焕肤", "视黄醇"],
-    removeTag: "酸类焕肤",
-    keepIfAllRemoved: true,
-    advantage: "当前组合优先保留A醇，已移除酸类，避免叠加刺激。"
+    advantage: "当前组合含A醇和酸类：请分晚使用，中间穿插修护，避免同晚叠加刺激。"
   },
   {
     id: "single-acid",

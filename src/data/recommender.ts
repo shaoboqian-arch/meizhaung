@@ -193,7 +193,7 @@ const hardConflictCount = (
   standaloneProductIds: string[]
 ) =>
   getMatchingIngredientRelations(getProductsByIds(ids, allProducts), ingredients, standaloneProductIds).filter((relation) =>
-    relation.type === "互相抵消" || relation.type === "互相克制"
+    relation.type === "互相抵消"
   ).length;
 
 const candidateKeepsRoutineStable = (
@@ -548,19 +548,28 @@ export function buildRoutineRecommendation(
       const bestConflictCategoryIds = conflictingCategories
         .map((category) => getBestProductForCategory(category, allProducts)?.id)
         .filter((id): id is string => Boolean(id));
+      const replacedAcidCleansers = workingProducts.filter((product) => {
+        if (product.category !== "洁面" || !productHasTag(product, ingredients, "酸类焕肤")) return false;
+        const replacementId = bestConflictCategoryIds.find((id) =>
+          allProducts.find((item) => item.id === id)?.category === product.category
+        );
+        const replacement = allProducts.find((item) => item.id === replacementId);
+        return Boolean(replacement && replacement.id !== product.id && !productHasTag(replacement, ingredients, "酸类焕肤"));
+      });
 
       nextIds = [...bestConflictCategoryIds, ...leaveOnIds];
       standaloneProductIds = Array.from(new Set([...standaloneProductIds, ...bestConflictCategoryIds]));
       advantages.push(rule.advantage);
+      if (replacedAcidCleansers.length > 0) {
+        advantages.push(
+          `${replacedAcidCleansers.map((product) => `「${getProductLabel(product.id, allProducts)}」`).join("、")}的酸类去角质功能已替换为单独的温和清洁步骤，不再保留该酸类功能。`
+        );
+      }
       return;
     }
 
-    if (rule.action === "remove-tag-products" && rule.removeTag) {
+    if (rule.action === "separate-tag-products") {
       if (!currentHasTags(rule.triggerTags)) return;
-      const keptIds = currentProducts()
-        .filter((product) => !productHasTag(product, ingredients, rule.removeTag))
-        .map((product) => product.id);
-      if (keptIds.length || !rule.keepIfAllRemoved) nextIds = keptIds;
       advantages.push(rule.advantage);
       return;
     }

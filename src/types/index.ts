@@ -96,12 +96,10 @@ export interface IngredientRelation {
 
 export interface RoutineAdjustmentRule {
   id: string;
-  action: "standalone-categories" | "remove-tag-products" | "keep-first-tag-product";
+  action: "standalone-categories" | "separate-tag-products" | "keep-first-tag-product";
   triggerTags?: IngredientTag[];
   repeatedTag?: IngredientTag;
   categories?: ProductCategory[];
-  removeTag?: IngredientTag;
-  keepIfAllRemoved?: boolean;
   advantage: string;
 }
 
