@@ -31,14 +31,22 @@ import {
 import {
   createRoutineCombination,
   loadRoutineCombination,
-  mergeRoutineSnapshots,
   RoutineSyncError,
   saveRoutineCombination,
   snapshotSignature,
   type RecentRoutineCombination,
   type RoutineCombination,
+  type RoutineSyncFailureKind,
   type RoutineSnapshot
 } from "./data/routineSync";
+import {
+  clearRoutineDraftAfterReadback,
+  createRoutineDraftJournal,
+  persistRoutineDraftJournal,
+  readRoutineDraftJournal,
+  rebaseRoutineDraftJournal
+} from "./data/routineDraftJournal";
+import { persistRoutineEditCredential, readRoutineEditCredential } from "./data/routineEditCredential";
 import type { IngredientTag, Product, ProductCategory, SkinConcern } from "./types";
 import heroCare from "../mp-weixin/src/assets/illustrations/hero-care.png";
 import heroProducts from "../mp-weixin/src/assets/illustrations/hero-products.png";
@@ -247,6 +255,7 @@ function App() {
   const lastSyncedSignatureRef = useRef("");
   const pendingSnapshotRef = useRef<RoutineSnapshot | null>(null);
   const saveInFlightRef = useRef(false);
+  const syncBlockedFailureRef = useRef<RoutineSyncFailureKind | null>(null);
   const retryTimerRef = useRef<number | null>(null);
   const flushPendingSaveRef = useRef<() => Promise<void>>(async () => undefined);
 
@@ -305,45 +314,137 @@ function App() {
     setRoutineCode("");
   }, [applyRoutineSnapshot, updateRoutineMetadata]);
 
+  const acceptRoutineWithDraft = useCallback((routine: RoutineCombination, status: string) => {
+    const draft = readRoutineDraftJournal(routine.code);
+    if (draft.kind === "corrupt") {
+      updateRoutineMetadata(routine, "检测到无法读取的本机原稿记录，已暂停覆盖和同步。");
+      return;
+    }
+    if (draft.kind === "missing") {
+      syncBlockedFailureRef.current = null;
+      acceptRoutine(routine, status);
+      return;
+    }
+    if (clearRoutineDraftAfterReadback(routine.code, routine.snapshot)) {
+      syncBlockedFailureRef.current = null;
+      acceptRoutine(routine, `${status}，已确认本机原稿收据。`);
+      return;
+    }
+
+    const rebased = rebaseRoutineDraftJournal(draft.journal, routine);
+    updateRoutineMetadata(routine, status);
+    applyRoutineSnapshot(rebased.mergedSnapshot);
+    if (!routine.access.canEdit) {
+      setRoutineStatus("本机未确认原稿已保留；当前只有查看权限，未向远端写入。");
+      return;
+    }
+    if (!persistRoutineDraftJournal(rebased.journal)) {
+      setRoutineStatus("本机原稿记录无法持久化，已暂停同步，未覆盖任何内容。");
+      return;
+    }
+    syncBlockedFailureRef.current = null;
+    pendingSnapshotRef.current = rebased.mergedSnapshot;
+    setRoutineStatus("已合并本机未确认原稿，正在安全保存...");
+    queueMicrotask(() => void flushPendingSaveRef.current());
+  }, [acceptRoutine, applyRoutineSnapshot, updateRoutineMetadata]);
+
   const flushPendingSave = useCallback(async () => {
     if (saveInFlightRef.current || !activeRoutineRef.current) return;
+    if (syncBlockedFailureRef.current) return;
     saveInFlightRef.current = true;
-    let retryLater = false;
+    let stopDrain = false;
 
     try {
       while (pendingSnapshotRef.current && activeRoutineRef.current) {
-        const desiredSnapshot = pendingSnapshotRef.current;
+        const pendingSnapshot = pendingSnapshotRef.current;
         pendingSnapshotRef.current = null;
         const routineAtStart = activeRoutineRef.current as RoutineCombination;
-        const baseSnapshot = lastSyncedSnapshotRef.current || routineAtStart.snapshot;
+        const draftRead = readRoutineDraftJournal(routineAtStart.code);
+        if (draftRead.kind === "corrupt") {
+          setRoutineStatus("本机原稿记录无法读取，已暂停同步，未覆盖任何内容。");
+          stopDrain = true;
+          break;
+        }
+        const draft = draftRead.kind === "ready"
+          ? draftRead.journal
+          : createRoutineDraftJournal(
+              {
+                code: routineAtStart.code,
+                version: routineAtStart.version,
+                snapshot: lastSyncedSnapshotRef.current || routineAtStart.snapshot
+              },
+              pendingSnapshot
+            );
+        if (!persistRoutineDraftJournal(draft)) {
+          setRoutineStatus("本机原稿记录无法持久化，已暂停同步，未覆盖任何内容。");
+          stopDrain = true;
+          break;
+        }
+        const editCredential = readRoutineEditCredential(routineAtStart.code);
+        if (!routineAtStart.access.canEdit || !editCredential) {
+          setRoutineStatus("此设备没有编辑凭证，组合保持只读，本机原稿已保留。");
+          stopDrain = true;
+          break;
+        }
         setRoutineStatus("正在保存...");
 
         try {
-          const saved = await saveRoutineCombination(routineAtStart, desiredSnapshot);
+          const saved = await saveRoutineCombination(routineAtStart, draft.desiredSnapshot, editCredential);
           if (activeRoutineRef.current?.code !== routineAtStart.code) return;
-          updateRoutineMetadata(saved, `已保存 · ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`);
+          const receipt = await loadRoutineCombination(saved.code, editCredential);
+          if (activeRoutineRef.current?.code !== routineAtStart.code) return;
+          if (snapshotSignature(receipt.snapshot) === snapshotSignature(draft.desiredSnapshot)) {
+            updateRoutineMetadata(receipt, `已保存 · ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`);
+            clearRoutineDraftAfterReadback(receipt.code, receipt.snapshot);
+            continue;
+          }
+          const latestDraft = readRoutineDraftJournal(receipt.code);
+          const rebased = rebaseRoutineDraftJournal(
+            latestDraft.kind === "ready" ? latestDraft.journal : draft,
+            receipt
+          );
+          if (!persistRoutineDraftJournal(rebased.journal)) {
+            setRoutineStatus("服务器收据已读取，但本机原稿记录无法更新，已暂停同步。");
+            stopDrain = true;
+            break;
+          }
+          updateRoutineMetadata(receipt, "服务器内容已变化，正在合并本机原稿...");
+          applyRoutineSnapshot(rebased.mergedSnapshot);
+          pendingSnapshotRef.current = rebased.mergedSnapshot;
         } catch (error) {
           if (error instanceof RoutineSyncError && error.status === 409 && error.combination) {
-            const latestLocalSnapshot = pendingSnapshotRef.current || desiredSnapshot;
-            pendingSnapshotRef.current = null;
-            const mergedSnapshot = mergeRoutineSnapshots(baseSnapshot, latestLocalSnapshot, error.combination.snapshot);
+            const latestDraft = readRoutineDraftJournal(routineAtStart.code);
+            const rebased = rebaseRoutineDraftJournal(
+              latestDraft.kind === "ready" ? latestDraft.journal : draft,
+              error.combination
+            );
+            if (!persistRoutineDraftJournal(rebased.journal)) {
+              setRoutineStatus("检测到冲突，但本机原稿记录无法更新，已暂停同步。");
+              stopDrain = true;
+              break;
+            }
             updateRoutineMetadata(error.combination, "检测到另一设备更新，正在合并...");
-            applyRoutineSnapshot(mergedSnapshot);
-            pendingSnapshotRef.current = mergedSnapshot;
+            applyRoutineSnapshot(rebased.mergedSnapshot);
+            pendingSnapshotRef.current = rebased.mergedSnapshot;
             continue;
           }
 
-          pendingSnapshotRef.current = pendingSnapshotRef.current || desiredSnapshot;
-          setRoutineStatus(error instanceof Error ? error.message : "自动保存失败，正在重试");
-          retryLater = true;
-          if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
-          retryTimerRef.current = window.setTimeout(() => void flushPendingSaveRef.current(), 3_000);
+          pendingSnapshotRef.current = draft.desiredSnapshot;
+          const failure = error instanceof RoutineSyncError ? error.kind : "transient";
+          setRoutineStatus(error instanceof Error ? error.message : "自动保存失败，本机原稿已保留。");
+          if (failure === "transient") {
+            if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
+            retryTimerRef.current = window.setTimeout(() => void flushPendingSaveRef.current(), 3_000);
+          } else {
+            syncBlockedFailureRef.current = failure;
+          }
+          stopDrain = true;
           break;
         }
       }
     } finally {
       saveInFlightRef.current = false;
-      if (pendingSnapshotRef.current && !retryLater) queueMicrotask(() => void flushPendingSaveRef.current());
+      if (pendingSnapshotRef.current && !stopDrain) queueMicrotask(() => void flushPendingSaveRef.current());
     }
   }, [applyRoutineSnapshot, updateRoutineMetadata]);
 
@@ -362,14 +463,42 @@ function App() {
     let cancelled = false;
     setRoutineBusy(true);
     setRoutineStatus("正在恢复上次组合...");
-    loadRoutineCombination(savedCode)
+    loadRoutineCombination(savedCode, readRoutineEditCredential(savedCode))
       .then((routine) => {
-        if (!cancelled) acceptRoutine(routine, "已恢复上次组合");
+        if (!cancelled) acceptRoutineWithDraft(routine, "已恢复上次组合");
       })
       .catch((error) => {
         if (cancelled) return;
-        localStorage.removeItem(activeRoutineKey);
-        setRoutineStatus(error instanceof Error ? error.message : "无法恢复上次组合");
+        const draft = readRoutineDraftJournal(savedCode);
+        if (draft.kind === "ready") {
+          const credential = readRoutineEditCredential(savedCode);
+          const rememberedName = loadRecentRoutines().find((item) => item.code === savedCode)?.name || "未确认原稿";
+          const localRoutine: RoutineCombination = {
+            code: savedCode,
+            name: rememberedName,
+            version: draft.journal.baseVersion,
+            updatedAt: draft.journal.updatedAt,
+            snapshot: draft.journal.baseSnapshot,
+            access: credential ? { canEdit: true, mode: "editor" } : { canEdit: false, mode: "viewer" }
+          };
+          applyRoutineSnapshot(draft.journal.desiredSnapshot);
+          updateRoutineMetadata(localRoutine, "远端读取失败，本机未确认原稿已保留，未覆盖任何内容。");
+          pendingSnapshotRef.current = draft.journal.desiredSnapshot;
+          const failure = error instanceof RoutineSyncError ? error.kind : "transient";
+          if (failure === "transient" && credential) {
+            if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
+            retryTimerRef.current = window.setTimeout(() => void flushPendingSaveRef.current(), 3_000);
+          } else {
+            syncBlockedFailureRef.current = failure;
+          }
+        } else if (draft.kind === "corrupt") {
+          syncBlockedFailureRef.current = "invalid-request";
+          setRoutineStatus("本机原稿记录无法读取，已暂停覆盖和同步。");
+        } else {
+          const failure = error instanceof RoutineSyncError ? error.kind : "transient";
+          syncBlockedFailureRef.current = failure === "transient" ? null : failure;
+          setRoutineStatus(error instanceof Error ? error.message : "无法恢复上次组合，本机内容未被覆盖。");
+        }
       })
       .finally(() => {
         if (!cancelled) setRoutineBusy(false);
@@ -378,12 +507,26 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [acceptRoutine]);
+  }, [acceptRoutineWithDraft, applyRoutineSnapshot, updateRoutineMetadata]);
 
   useEffect(() => {
     if (!activeRoutine) return;
     const snapshot: RoutineSnapshot = { selectedIds, skinConcerns, localProducts };
     if (snapshotSignature(snapshot) === lastSyncedSignatureRef.current) return;
+
+    const journal = createRoutineDraftJournal(
+      {
+        code: activeRoutine.code,
+        version: activeRoutine.version,
+        snapshot: lastSyncedSnapshotRef.current || activeRoutine.snapshot
+      },
+      snapshot
+    );
+    if (!persistRoutineDraftJournal(journal)) {
+      setRoutineStatus("本机原稿记录无法持久化，已暂停同步，未覆盖任何内容。");
+      return;
+    }
+    if (!activeRoutine.access.canEdit || syncBlockedFailureRef.current) return;
 
     const timer = window.setTimeout(() => {
       pendingSnapshotRef.current = snapshot;
@@ -399,12 +542,13 @@ function App() {
 
     const poll = async () => {
       if (polling || saveInFlightRef.current || pendingSnapshotRef.current) return;
+      if (syncBlockedFailureRef.current || readRoutineDraftJournal(activeRoutine.code).kind !== "missing") return;
       if (snapshotSignature(getCurrentRoutineSnapshot()) !== lastSyncedSignatureRef.current) return;
       polling = true;
       try {
-        const remoteRoutine = await loadRoutineCombination(activeRoutine.code);
+        const remoteRoutine = await loadRoutineCombination(activeRoutine.code, readRoutineEditCredential(activeRoutine.code));
         if (!cancelled && remoteRoutine.version > (activeRoutineRef.current?.version || 0)) {
-          acceptRoutine(remoteRoutine, "已接收另一设备的更新");
+          acceptRoutineWithDraft(remoteRoutine, "已接收另一设备的更新");
         }
       } catch (error) {
         if (!cancelled) setRoutineStatus(error instanceof Error ? error.message : "同步暂时中断");
@@ -418,7 +562,7 @@ function App() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [activeRoutine?.code, acceptRoutine, getCurrentRoutineSnapshot]);
+  }, [activeRoutine?.code, acceptRoutineWithDraft, getCurrentRoutineSnapshot]);
 
   useEffect(() => () => {
     if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
@@ -512,8 +656,13 @@ function App() {
       const snapshot = inheritCurrentRoutine
         ? getCurrentRoutineSnapshot()
         : { selectedIds: [], skinConcerns: [], localProducts: [] };
-      const routine = await createRoutineCombination(name, snapshot);
-      acceptRoutine(routine, "组合已创建，后续勾选将自动保存");
+      const created = await createRoutineCombination(name, snapshot);
+      if (!persistRoutineEditCredential(created.combination.code, created.editCredential)) {
+        setRoutineStatus("组合已创建，但本机无法保存编辑凭证；为保护数据已保持只读。");
+        return;
+      }
+      syncBlockedFailureRef.current = null;
+      acceptRoutine(created.combination, "组合已创建，编辑凭证仅保存在本机");
       setNewRoutineName("");
     } catch (error) {
       setRoutineStatus(error instanceof Error ? error.message : "创建组合失败");
@@ -532,8 +681,9 @@ function App() {
     setRoutineBusy(true);
     setRoutineStatus("正在读取组合...");
     try {
-      const routine = await loadRoutineCombination(normalizedCode);
-      acceptRoutine(routine, "组合已打开，正在保持同步");
+      const routine = await loadRoutineCombination(normalizedCode, readRoutineEditCredential(normalizedCode));
+      syncBlockedFailureRef.current = null;
+      acceptRoutineWithDraft(routine, routine.access.canEdit ? "组合已打开，正在保持同步" : "组合已打开，仅查看");
     } catch (error) {
       setRoutineStatus(error instanceof Error ? error.message : "读取组合失败");
     } finally {
@@ -546,6 +696,7 @@ function App() {
     lastSyncedSnapshotRef.current = null;
     lastSyncedSignatureRef.current = "";
     pendingSnapshotRef.current = null;
+    syncBlockedFailureRef.current = null;
     setActiveRoutine(null);
     setRoutineStatus("请选择另一个组合，当前内容不会丢失");
     localStorage.removeItem(activeRoutineKey);
@@ -555,16 +706,23 @@ function App() {
     if (!activeRoutine) return;
     try {
       await navigator.clipboard.writeText(activeRoutine.code);
-      setRoutineStatus("同步码已复制，可在另一台设备打开");
+      setRoutineStatus("分享码已复制；接收者默认仅可查看，编辑凭证不会共享。");
     } catch {
-      setRoutineStatus(`同步码：${activeRoutine.code}`);
+      setRoutineStatus(`分享码：${activeRoutine.code}（接收者默认仅查看）`);
     }
   };
 
   const ensureActiveRoutine = () => {
-    if (activeRoutineRef.current) return true;
-    setRoutineStatus("请先新建或打开一个用户组合");
-    return false;
+    const routine = activeRoutineRef.current;
+    if (!routine) {
+      setRoutineStatus("请先新建或打开一个用户组合");
+      return false;
+    }
+    if (!routine.access.canEdit) {
+      setRoutineStatus("当前组合为只读；本机原稿不会被覆盖。");
+      return false;
+    }
+    return true;
   };
 
   const saveLocalProducts = (nextProducts: Product[]) => {
@@ -771,11 +929,11 @@ function App() {
         <section className={activeRoutine ? "routine-profile-bar connected" : "routine-profile-bar setup"}>
           {activeRoutine ? (
             <>
-              <button className="routine-name-button" onClick={copyRoutineCode} title="复制同步码">
+              <button className="routine-name-button" onClick={copyRoutineCode} title="复制只读分享码">
                 <Users />
                 <span>
                   <strong>{activeRoutine.name}</strong>
-                  <small>同步码 {activeRoutine.code}</small>
+                  <small>只读分享码 {activeRoutine.code}</small>
                 </span>
                 <Copy />
               </button>
@@ -794,7 +952,7 @@ function App() {
                 <Cloud />
                 <span>
                   <strong>先选择用户组合</strong>
-                  <small>手机和电脑使用同一同步码，即可接着编辑</small>
+                  <small>分享码可跨设备查看；编辑凭证仅保存在创建设备</small>
                 </span>
               </div>
               <div className="routine-setup-actions">
@@ -830,7 +988,7 @@ function App() {
                     onKeyDown={(event) => {
                       if (event.key === "Enter") void openUserRoutine();
                     }}
-                    placeholder="6 位同步码"
+                    placeholder="6 位只读分享码"
                   />
                   <button className="routine-open-button" onClick={() => void openUserRoutine()} disabled={routineBusy}>
                     <RefreshCw />

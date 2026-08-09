@@ -6,6 +6,21 @@ export interface RoutineSnapshot {
   localProducts: Product[];
 }
 
+export const normalizeRoutineSnapshot = (snapshot: RoutineSnapshot): RoutineSnapshot => ({
+  selectedIds: [...snapshot.selectedIds],
+  skinConcerns: [...snapshot.skinConcerns],
+  localProducts: snapshot.localProducts.map(({ image: _image, ...product }) => product)
+});
+
+export const snapshotSignature = (snapshot: RoutineSnapshot) => {
+  const normalized = normalizeRoutineSnapshot(snapshot);
+  return JSON.stringify({
+    selectedIds: [...normalized.selectedIds].sort(),
+    skinConcerns: [...normalized.skinConcerns].sort(),
+    localProducts: normalized.localProducts.sort((left, right) => left.id.localeCompare(right.id))
+  });
+};
+
 const mergeStringList = <T extends string>(base: T[], local: T[], remote: T[]) => {
   const baseSet = new Set(base);
   const localSet = new Set(local);
