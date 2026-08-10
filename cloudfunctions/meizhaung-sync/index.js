@@ -22,8 +22,7 @@ const combinations = database.collection(COLLECTION);
 const server = express();
 const requestWindows = new Map();
 const ALLOWED_ORIGINS = new Set([
-  "https://shaoboqian-arch.github.io",
-  "https://qianshaobo-d3gjx8wkh621904d1-1456392181.tcloudbaseapp.com"
+  "https://shaoboqian-arch.github.io"
 ]);
 
 function applyCors(request, response) {
