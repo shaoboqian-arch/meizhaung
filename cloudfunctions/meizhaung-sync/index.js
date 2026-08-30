@@ -21,18 +21,14 @@ const database = app.database();
 const combinations = database.collection(COLLECTION);
 const server = express();
 const requestWindows = new Map();
+// CORS 分两层，按来源互斥、不会重复：
+// - tcloudbaseapp.com 前端：由 CloudBase HTTP 访问层自动回显 Access-Control-Allow-Origin；
+// - 其他自有前端（GitHub Pages）：访问层不回显，由下方白名单在函数内补头。
+// 注意：把访问层已覆盖的域名加入白名单会产生重复头，浏览器将直接拒绝响应
+//（2026-08-10 与 2026-08-30 两次实测确认）。
 const ALLOWED_ORIGINS = new Set([
-  "https://shaoboqian-arch.github.io",
-  "https://qianshaobo-d3gjx8wkh621904d1-1456392181.tcloudbaseapp.com"
+  "https://shaoboqian-arch.github.io"
 ]);
-
-// 限流窗口按 IP 惰性记录；过期条目堆积只在这里回收，避免 Map 无限增长。
-function pruneRateLimitWindows(now) {
-  if (requestWindows.size < 500) return;
-  for (const [key, window] of requestWindows) {
-    if (now - window.startedAt > 60_000) requestWindows.delete(key);
-  }
-}
 
 function applyCors(request, response) {
   const origin = request.get("origin");
@@ -43,6 +39,14 @@ function applyCors(request, response) {
   response.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   response.set("Access-Control-Allow-Headers", "Content-Type, X-Routine-Edit-Credential");
   response.set("Cache-Control", "no-store");
+}
+
+// 限流窗口按 IP 惰性记录；过期条目堆积只在这里回收，避免 Map 无限增长。
+function pruneRateLimitWindows(now) {
+  if (requestWindows.size < 500) return;
+  for (const [key, window] of requestWindows) {
+    if (now - window.startedAt > 60_000) requestWindows.delete(key);
+  }
 }
 
 server.use((request, response, next) => {
