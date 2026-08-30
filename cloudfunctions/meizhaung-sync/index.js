@@ -22,8 +22,17 @@ const combinations = database.collection(COLLECTION);
 const server = express();
 const requestWindows = new Map();
 const ALLOWED_ORIGINS = new Set([
-  "https://shaoboqian-arch.github.io"
+  "https://shaoboqian-arch.github.io",
+  "https://qianshaobo-d3gjx8wkh621904d1-1456392181.tcloudbaseapp.com"
 ]);
+
+// 限流窗口按 IP 惰性记录；过期条目堆积只在这里回收，避免 Map 无限增长。
+function pruneRateLimitWindows(now) {
+  if (requestWindows.size < 500) return;
+  for (const [key, window] of requestWindows) {
+    if (now - window.startedAt > 60_000) requestWindows.delete(key);
+  }
+}
 
 function applyCors(request, response) {
   const origin = request.get("origin");
@@ -42,6 +51,7 @@ server.use((request, response, next) => {
 
   const clientKey = request.get("x-forwarded-for")?.split(",")[0]?.trim() || request.ip || "unknown";
   const now = Date.now();
+  pruneRateLimitWindows(now);
   const window = requestWindows.get(clientKey);
   if (!window || now - window.startedAt > 60_000) {
     requestWindows.set(clientKey, { count: 1, startedAt: now });
