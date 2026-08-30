@@ -111,7 +111,7 @@ try {
   const desktopPage = await desktop.newPage();
   await desktopPage.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
   await desktopPage.getByRole("heading", { name: "情况", level: 1 }).waitFor();
-  await desktopPage.getByPlaceholder("6 位同步码").fill(syncCode);
+  await desktopPage.getByPlaceholder("6 位只读分享码").fill(syncCode);
   await desktopPage.getByRole("button", { name: "打开组合" }).click();
   await desktopPage.locator(".routine-name-button").waitFor();
   assert.equal(await desktopPage.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), true, "桌面端存在横向溢出");
