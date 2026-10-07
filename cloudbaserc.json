@@ -5,6 +5,7 @@
   "functions": [
     {
       "name": "meizhaung-sync",
+      "type": "HTTP",
       "runtime": "Nodejs20.19",
       "handler": "index.main",
       "memorySize": 256,

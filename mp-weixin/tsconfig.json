@@ -1,12 +1,13 @@
 {
-  "extends": "../tsconfig.json",
+  "extends": "../tsconfig.app.json",
   "compilerOptions": {
     "baseUrl": ".",
     "jsx": "react-jsx",
     "paths": {
-      "@shared/*": ["../src/*"]
+      "@shared/data/*": ["../src/data/*"],
+      "@shared/types": ["../src/types/index.ts"]
     },
     "types": ["@tarojs/taro", "@tarojs/components"]
   },
-  "include": ["src", "../src/data", "../src/types"]
+  "include": ["src"]
 }

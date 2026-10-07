@@ -11,12 +11,14 @@ export default defineConfig({
     828: 1.81
   },
   sourceRoot: "src",
-  outputRoot: "dist",
+  outputRoot: process.env.BEAUTY_MP_OUTPUT_DIR
+    ? path.relative(path.resolve(__dirname, ".."), path.resolve(process.env.BEAUTY_MP_OUTPUT_DIR)) : "dist",
   framework: "react",
   compiler: "webpack5",
   plugins: ["@tarojs/plugin-framework-react"],
   alias: {
-    "@shared": path.resolve(__dirname, "../../src")
+    "@shared/data": path.resolve(__dirname, "../../src/data"),
+    "@shared/types": path.resolve(__dirname, "../../src/types")
   },
   mini: {
     webpackChain(chain) {
