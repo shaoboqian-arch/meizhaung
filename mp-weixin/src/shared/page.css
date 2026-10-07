@@ -56,7 +56,7 @@
   font-weight: 640;
 }
 
-.section-title text:last-child {
+.section-title text + text {
   color: #9a7a6d;
   font-size: 24px;
 }
@@ -169,17 +169,18 @@
   background: rgba(232, 111, 92, 0.12);
 }
 
-.tag.risk-低 {
+/* 类名用英文：微信 WXSS 选择器不支持中文标识符 */
+.tag.risk-low {
   color: #4f8a4b;
   background: rgba(115, 157, 113, 0.12);
 }
 
-.tag.risk-中 {
+.tag.risk-mid {
   color: #b36b25;
   background: rgba(214, 145, 72, 0.14);
 }
 
-.tag.risk-高 {
+.tag.risk-high {
   color: #d75c50;
   background: rgba(215, 92, 80, 0.12);
 }
@@ -406,19 +407,6 @@
   background: radial-gradient(circle, rgba(232, 111, 92, 0.13), rgba(232, 111, 92, 0.04) 52%, transparent 72%);
 }
 
-.top::after {
-  content: "";
-  position: absolute;
-  right: 26px;
-  bottom: 20px;
-  width: 72px;
-  height: 94px;
-  border: 4px solid rgba(145, 184, 126, 0.72);
-  border-radius: 24px 24px 18px 18px;
-  background: linear-gradient(180deg, #eef7e6, #d7eee1);
-  animation: bSoftFloat 4s ease-in-out infinite;
-}
-
 .top > view,
 .top > text {
   position: relative;
@@ -463,7 +451,7 @@
   font-weight: 640;
 }
 
-.section-title text:last-child {
+.section-title text + text {
   color: #b18470;
 }
 
@@ -537,10 +525,6 @@
   border-radius: 20px;
 }
 
-.top.illustrated::after {
-  display: none;
-}
-
 .top-art-image {
   position: absolute;
   right: -28px;
@@ -588,7 +572,7 @@
   font-size: 26px;
 }
 
-.section-title text:last-child,
+.section-title text + text,
 .muted {
   font-size: 19px;
 }
@@ -611,8 +595,12 @@
 
 .primary-btn {
   height: 62px;
+  width: 100%;
   border-radius: 12px;
   font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .secondary-btn {
