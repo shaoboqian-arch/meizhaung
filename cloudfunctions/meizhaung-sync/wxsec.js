@@ -7,7 +7,10 @@ const crypto = require("crypto");
 // - code2Session 返回的 session_key 只留在服务端内存中随即丢弃，绝不出站、绝不入日志。
 // - 所有网络调用允许注入 fetchImpl / 时钟，供契约测试在无网环境验证纯逻辑。
 
-const MP_APPID = process.env.WECHAT_APPID || "wxcdd528f3f224afe3";
+// 2026-10-08 实证：美妆小程序真身 = 护肤成分搭配助手 wx94fbe5333a32ecd0（WorkBuddy 托管发布的账号，
+// 控制台名称/简介/AppSecret 三方吻合）；project.config.json 里曾写死的 wxcdd528f3f224afe3 是陈旧错误值。
+// 生产以环境变量 WECHAT_APPID 为准，此处默认值仅为兜底。
+const MP_APPID = process.env.WECHAT_APPID || "wx94fbe5333a32ecd0";
 const OPENID_PATTERN = /^[A-Za-z0-9_-]{24,32}$/;
 
 function resolveWxSecret(env = process.env) {

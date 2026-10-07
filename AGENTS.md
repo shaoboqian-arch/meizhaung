@@ -63,7 +63,7 @@ msgSecCheck（免费）已接入，架构是**独立审核端点**而非内联�
 - **故障放行原则**：审核基础设施故障（token 异常、微信 5xx、网络）→ 放行并记日志；只有微信明确裁决 risky / badOpenid 才阻断。合规底线=risky 必拦，可用性底线=审核通道故障不冻结保存主链路。
 - 小程序端：`src/shared/wxsession.ts`（openid 缓存键 `beauty.wx.openid.v1` + `checkContentBeforeSave`），已挂 product-add 提交（brand/model/ingredientText 三手输字段）。Web 端不走此链路（无微信身份，微信审核只辖小程序内 UGC）。
 - 契约测试：`tests/wxsec-contract.mjs`（6 例）+ `mp-weixin/tests/wxsession-client.test.ts`（5 例，随 `mp-weixin/scripts/test.cjs` 跑，74/74）。
-- ⚠ **AppSecret 状态（2026-10-07 深夜）**：用户提供的密钥经 stable_token 直调实测 **40125 invalid appsecret**（与健身 appid 交叉验证也 40125，排除串号）——待用户重新生成并提供；换上后只需 MCP `callCloudApi(scf/UpdateFunctionConfiguration)` 全量更新三个环境变量（OCR_SECRET_ID/KEY + WECHAT_APPSECRET，**SCF 是全量替换语义，漏传会清掉 OCR 密钥**），无需重新部署。code2session 实测可用该密钥验证：假 code 返 40029 才算密钥正确（40125=密钥错）。
+- ✅ **AppSecret 已激活（2026-10-08 凌晨）**：第二串密钥 `09426e36...` 经 stable_token 验证有效，但**属于 `wx94fbe5333a32ecd0`（护肤成分搭配助手）——这才是美妆小程序真身**。根因：project.config.json 曾写死的 `wxcdd528f3f224afe3` 是陈旧错误值（不是用户实际运行的小程序），导致前两轮"密钥无效"误判——密钥本身一直是对的，验真时对照的 appid 错了。铁证：该控制台名称/简介=美妆内容、开发管理"已托管给第三方"（WorkBuddy）、wx94f+两串密钥 stable_token 双双 TOKEN_OK。环境变量现为四键（OCR_SECRET_ID/KEY + WECHAT_APPID=wx94fbe5333a32ecd0 + WECHAT_APPSECRET），wxsec.js 默认 appid 同步改真身。**四项验证全过**：health 200；/wechat/session 假 code → 40029（密钥正确铁证）；/sec-check 假 openid → 400 中文拒答（token+审核全链路通）；/ocr 502 回归不变（OCR 密钥完好）。注意：SCF UpdateFunctionConfiguration 是**全量替换语义**，改环境变量必须带全四键。客户端预检（product-add 保存前审核）已提交，随下一版体验版生效。
 
 ## 正式版上线（2026-10-05）
 
@@ -152,8 +152,9 @@ Taro 小程序链路已恢复可用，**不再搁置**（原「搁置（用户�
 - **小程序端零网络请求**（`grep tcloudbaseapp|wx.request|fetch` 在 `mp-weixin/src` 命中 0）：数据来自 `src/data/catalog` + 本地 storage，
   因此不依赖服务器域名备案；**2026-10-04 接云服务后这条已不成立**——现在会请求 `mp-api.app.workbuddy.host`。
   云函数 `meizhaung-sync` 的跨设备同步在小程序端仍不可用，已由 WorkBuddy 云服务接管。
-- AppID `wxcdd528f3f224afe3` 已硬编码在 `project.config.json`。
-  **2026-10-04 已解除「微搭低代码」第三方授权（原 2026/08/09 授出），占位清空，AppID 保留不变。**
+- **AppID = `wx94fbe5333a32ecd0`（护肤成分搭配助手），已更正到 `project.config.json`（2026-10-08 实证，见上文"AppSecret 已激活"节）。**
+  曾写死的 `wxcdd528f3f224afe3` 是陈旧错误值——WorkBuddy 上传不受它影响（上传走扫码授权绑定的账号），
+  但本地开发者工具/预览会用错身份。**2026-10-04 已解除「微搭低代码」第三方授权（原 2026/08/09 授出）。**
   后续若再遇「未取得相关权限，平台无法代你上传代码与提审」，九成是「设置 → 第三方授权管理」里
   又被某个第三方平台占用（微信规定一个小程序同时只能授权一个第三方平台）—— **先查那张表，别改代码**。
   扫码授权时必须勾选「开发管理与数据分析权限」，缺该项会报同样的错。
