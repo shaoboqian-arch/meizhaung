@@ -54,6 +54,17 @@ tcb hosting:deploy dist -e qianshaobo-d3gjx8wkh621904d1
   `cloud.auth` / `database` / `llm` 不受影响。要传图只能走 `cloud.database` 存文本路径或另找方案。
 - 登录走 `wx.login` + `cloud.auth.signInWithWechat(code, 运行时 appid)`；**运行时 appid 不能写死**（试用版与正式版是两个小程序）。
 
+## 微信内容安全链路（2026-10-07 接线，等正确 AppSecret 激活）
+
+msgSecCheck（免费）已接入，架构是**独立审核端点**而非内联组合同步路由——因为小程序的组合同步走 WorkBuddy 云，不经过 meizhaung-sync：
+
+- `cloudfunctions/meizhaung-sync/wxsec.js`：stable_token（缓存、提前 5 分钟过期）+ code2Session + msgSecCheck v2 + errcode 分类。**WECHAT_APPSECRET 只从环境变量读**（缺失=能力关闭）；session_key 只留在服务端内存，不回传不落日志。
+- 端点：`POST /wechat/session {code} → {openid}`；`POST /sec-check {content}` + `X-WX-Openid` 头 → 200 放行 / 400 违规或身份失效（中文文案）/ 429 限流。
+- **故障放行原则**：审核基础设施故障（token 异常、微信 5xx、网络）→ 放行并记日志；只有微信明确裁决 risky / badOpenid 才阻断。合规底线=risky 必拦，可用性底线=审核通道故障不冻结保存主链路。
+- 小程序端：`src/shared/wxsession.ts`（openid 缓存键 `beauty.wx.openid.v1` + `checkContentBeforeSave`），已挂 product-add 提交（brand/model/ingredientText 三手输字段）。Web 端不走此链路（无微信身份，微信审核只辖小程序内 UGC）。
+- 契约测试：`tests/wxsec-contract.mjs`（6 例）+ `mp-weixin/tests/wxsession-client.test.ts`（5 例，随 `mp-weixin/scripts/test.cjs` 跑，74/74）。
+- ⚠ **AppSecret 状态（2026-10-07 深夜）**：用户提供的密钥经 stable_token 直调实测 **40125 invalid appsecret**（与健身 appid 交叉验证也 40125，排除串号）——待用户重新生成并提供；换上后只需 MCP `callCloudApi(scf/UpdateFunctionConfiguration)` 全量更新三个环境变量（OCR_SECRET_ID/KEY + WECHAT_APPSECRET，**SCF 是全量替换语义，漏传会清掉 OCR 密钥**），无需重新部署。code2session 实测可用该密钥验证：假 code 返 40029 才算密钥正确（40125=密钥错）。
+
 ## 正式版上线（2026-10-05）
 
 **体验版已发布可用；正式版被微信拦截，原因是小程序后台未完成初始化。**

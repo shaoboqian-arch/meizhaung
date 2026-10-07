@@ -9,6 +9,14 @@ const {
   rotateEditAccess
 } = require("./accessPolicy");
 const { callGeneralBasicOcr, friendlyOcrError, resolveOcrCredentials } = require("./ocr");
+const {
+  OPENID_PATTERN,
+  classifySecCheck,
+  codeToSession,
+  msgSecCheck,
+  resetTokenCache,
+  resolveWxSecret
+} = require("./wxsec");
 
 const COLLECTION = "meizhaung_user_combinations";
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -349,6 +357,61 @@ server.post("/ocr", express.json({ limit: "8mb" }), async (request, response) =>
       return response.status(502).json({ error: friendlyOcrError(code) });
     }
     return response.status(500).json({ error: "识别服务暂时不可用，请稍后再试。" });
+  }
+});
+
+// —— 微信内容安全（msgSecCheck）链路，供小程序保存手输内容前调用 ——
+// POST /wechat/session：wx.login 的 code 换 openid（session_key 只留在服务端内存，不回传）。
+// POST /sec-check：{content} + X-WX-Openid 头 → 微信审核裁决。
+//   * 裁决为 risky / badOpenid → 400 拒绝；rateLimited → 429；
+//   * 审核基础设施故障（微信侧 5xx、token 异常）→ 放行并记日志（个人工具向应用，
+//     审核通道故障不应冻结全部保存；risky 裁决始终拦截，合规底线不破）。
+//   * Web 端无微信身份，不走这两个端点（微信审核只辖小程序内 UGC）。
+const SEC_CHECK_MAX_CONTENT = 8000;
+
+server.post("/wechat/session", async (request, response) => {
+  try {
+    const code = typeof request.body?.code === "string" ? request.body.code.trim() : "";
+    if (!code) return response.status(400).json({ error: "缺少微信登录凭证。" });
+    const secret = resolveWxSecret();
+    if (!secret) return response.status(503).json({ error: "微信登录服务未配置，请稍后再试。" });
+    const session = await codeToSession({ code, secret });
+    if (session.errcode) {
+      // 40029=code 无效/已用；不区分细分原因，客户端统一引导重试。
+      return response.status(400).json({ error: "微信登录已过期，请重试。", errcode: session.errcode });
+    }
+    return response.json({ ok: true, openid: session.openid });
+  } catch (error) {
+    console.log("[WxSession] error", error instanceof Error ? error.message : "unknown");
+    return response.status(502).json({ error: "微信登录服务暂时不可用，请稍后再试。" });
+  }
+});
+
+server.post("/sec-check", async (request, response) => {
+  try {
+    const content = typeof request.body?.content === "string" ? request.body.content.trim() : "";
+    if (!content) return response.status(400).json({ error: "没有需要审核的内容。" });
+    if (content.length > SEC_CHECK_MAX_CONTENT) return response.status(400).json({ error: "内容过长，请精简后再保存。" });
+    const openid = request.get("x-wx-openid") || "";
+    if (!OPENID_PATTERN.test(openid)) return response.status(400).json({ error: "微信身份已失效，请退出小程序重新进入后再试。" });
+    const secret = resolveWxSecret();
+    if (!secret) return response.status(503).json({ error: "内容审核服务未配置，请稍后再试。" });
+
+    let data = await msgSecCheck({ content, openid, secret });
+    let verdict = classifySecCheck(data);
+    if (verdict.verdict === "tokenExpired") {
+      resetTokenCache();
+      data = await msgSecCheck({ content, openid, secret });
+      verdict = classifySecCheck(data);
+    }
+    if (verdict.verdict === "pass") return response.json({ ok: true });
+    if (verdict.verdict === "risky" || verdict.verdict === "badOpenid") return response.status(400).json({ error: verdict.message });
+    if (verdict.verdict === "rateLimited") return response.status(429).json({ error: verdict.message });
+    console.log("[SecCheck] infra fallback errcode=", Number(data?.errcode ?? -1));
+    return response.json({ ok: true, unchecked: true });
+  } catch (error) {
+    console.log("[SecCheck] error", error instanceof Error ? error.message : "unknown");
+    return response.json({ ok: true, unchecked: true });
   }
 });
 

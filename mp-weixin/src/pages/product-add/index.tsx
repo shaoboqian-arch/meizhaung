@@ -5,6 +5,7 @@ import { categories } from "../../shared/constants";
 import { recognizeIngredientImage } from "../../shared/ocr";
 import type { ProductDraft } from "../../shared/product-draft";
 import { readProductDraft, saveProductDraft, commitProductDraft, matchIngredients } from "../../shared/storage";
+import { checkContentBeforeSave } from "../../shared/wxsession";
 import "../../shared/page.css";
 import "../products/index.css";
 
@@ -57,6 +58,8 @@ export default function ProductAddPage() {
     setBusy(true);
     try {
       if (!draft.brand.trim() || !draft.model.trim()) throw new Error("先填写品牌和型号");
+      // 微信内容安全预检：违规/身份失效会抛中文文案阻断；服务不可用自动放行，不卡保存主链路。
+      await checkContentBeforeSave([draft.brand, draft.model, draft.ingredientText]);
       saveProductDraft(draft);
       const result = matchIngredients(draft.ingredientText);
       const choice = await Taro.showModal({ title: "核对后入库", content:
