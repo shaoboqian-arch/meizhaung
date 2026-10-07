@@ -167,7 +167,7 @@ Taro 小程序链路已恢复可用，**不再搁置**（原「搁置（用户�
 - **进程缓存**：运行中的 MCP 进程缓存认证状态，修完凭证本会话内仍报 REQUIRED 属预期，新会话自动恢复。
 - **版本钉死**：插件 MCP 固定 2.23.11；禁止 `npx @latest` 独立 MCP 碰凭证；cloudbase-skills 仅用于只读诊断（日志/NoSQL 查询/环境信息），写操作一律走上面的 tcb 命令。
 - **GitHub**：直连 443 挂起，push 走 `git -c http.proxy=http://127.0.0.1:7897 push`（先探测端口）。
-- Git 状态：main 已与远端同步（15450c3）；工作区 ` .npmrc` 本地改动属既有状态（npmmirror + legacy-peer-deps），保持不提交。
+- 依赖安装配置：`.npmrc` 的 npmmirror 镜像与 `legacy-peer-deps` 属项目有效配置，按用户 2026-10-07 的收口要求纳入版本控制；不得包含凭据。
 
 ## 挂账（按优先级）
 
