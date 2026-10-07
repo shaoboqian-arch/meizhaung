@@ -32,6 +32,11 @@ async function getWorker(onProgress: (update: OcrProgressUpdate) => void): Promi
     workerPromise = import("tesseract.js")
       .then(({ createWorker }) =>
         createWorker(["eng", "chi_sim"], undefined, {
+          // M-04：引擎与模型全部自托管（scripts/vendor-tesseract.cjs + download-tessdata.cjs 生成），
+          // 运行时零第三方 CDN 依赖，消除未锁版被篡改/失效风险。
+          workerPath: "/tesseract/worker.min.js",
+          corePath: "/tesseract/core",
+          langPath: "/tesseract/lang",
           logger: ({ status, progress }) => {
             progressListener?.({
               phase: status === "recognizing text" ? "recognizing" : "loading",
