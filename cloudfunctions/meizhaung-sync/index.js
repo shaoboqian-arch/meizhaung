@@ -8,6 +8,7 @@ const {
   revokeEditAccess,
   rotateEditAccess
 } = require("./accessPolicy");
+const { callGeneralBasicOcr, friendlyOcrError, resolveOcrCredentials } = require("./ocr");
 
 const COLLECTION = "meizhaung_user_combinations";
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -49,6 +50,23 @@ function pruneRateLimitWindows(now) {
   }
 }
 
+// OCR 消耗付费配额，单独限流（每 IP 每分钟 12 次），与通用限流分开计数。
+const ocrWindows = new Map();
+const OCR_RATE_LIMIT = 12;
+
+function pruneOcrWindows(now) {
+  if (ocrWindows.size < 500) return;
+  for (const [key, window] of ocrWindows) {
+    if (now - window.startedAt > 60_000) ocrWindows.delete(key);
+  }
+}
+
+// /ocr 需要传图，单独挂 8MB 解析；组合同步接口维持 512kb 上限。
+server.use((request, response, next) => {
+  if (request.path === "/ocr") return next();
+  return express.json({ limit: "512kb" })(request, response, next);
+});
+
 server.use((request, response, next) => {
   applyCors(request, response);
   if (request.method === "OPTIONS") return response.status(204).end();
@@ -65,7 +83,6 @@ server.use((request, response, next) => {
   }
   return next();
 });
-server.use(express.json({ limit: "512kb" }));
 
 function cleanText(value, maxLength) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
@@ -288,6 +305,50 @@ server.delete("/combinations/:code/edit-credential", async (request, response) =
     return response.status(204).end();
   } catch (error) {
     return response.status(500).json({ error: error.message || "撤销编辑凭证失败。" });
+  }
+});
+
+server.post("/ocr", express.json({ limit: "8mb" }), async (request, response) => {
+  try {
+    const clientKey = request.get("x-forwarded-for")?.split(",")[0]?.trim() || request.ip || "unknown";
+    const now = Date.now();
+    pruneOcrWindows(now);
+    const window = ocrWindows.get(clientKey);
+    if (!window || now - window.startedAt > 60_000) {
+      ocrWindows.set(clientKey, { count: 1, startedAt: now });
+    } else {
+      window.count += 1;
+      if (window.count > OCR_RATE_LIMIT) return response.status(429).json({ error: "识别请求过于频繁，请稍后再试。" });
+    }
+
+    const imageBase64 = request.body?.imageBase64;
+    if (typeof imageBase64 !== "string" || imageBase64.length < 64) {
+      return response.status(400).json({ error: "请上传图片后重试。" });
+    }
+    if (imageBase64.length > 7_000_000) {
+      return response.status(413).json({ error: "图片过大，请压缩后重试。" });
+    }
+
+    const credentials = resolveOcrCredentials();
+    if (!credentials) {
+      return response.status(503).json({ error: friendlyOcrError("OCR_CREDENTIALS_MISSING") });
+    }
+    const result = await callGeneralBasicOcr({ imageBase64, credentials });
+    return response.json({ ok: true, text: result.text, itemCount: result.itemCount });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    if (code === "OCR_TIMEOUT") return response.status(504).json({ error: "识别超时，请稍后再试。" });
+    if (code === "FailedOperation_ImageNoText") {
+      return response.json({ ok: true, text: "", itemCount: 0 });
+    }
+    if (code.startsWith("LimitExceeded")) return response.status(429).json({ error: friendlyOcrError(code) });
+    if (code.startsWith("AuthFailure") || code === "UnauthorizedOperation" || code === "OCR_CREDENTIALS_MISSING") {
+      return response.status(503).json({ error: friendlyOcrError(code) });
+    }
+    if (code.startsWith("FailedOperation") || code === "OCR_MALFORMED_RESPONSE") {
+      return response.status(502).json({ error: friendlyOcrError(code) });
+    }
+    return response.status(500).json({ error: "识别服务暂时不可用，请稍后再试。" });
   }
 });
 

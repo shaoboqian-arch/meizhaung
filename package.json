@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "npm run test:logic && npm run test:sync-safety",
+    "test": "npm run test:logic && npm run test:sync-safety && node tests/ocr-contract.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:pages": "powershell -NoProfile -Command \"$env:GITHUB_PAGES='true'; npm run build\"",
@@ -16,12 +16,15 @@
     "ios:init": "npm run build && npx cap add ios",
     "ios:sync": "npm run build && npx cap sync ios",
     "ios:open": "npx cap open ios",
-    "mp:dev": "cd mp-weixin && taro build --type weapp && node scripts/fix-custom-wrapper.cjs && taro build --type weapp --watch",
-    "mp:build": "cd mp-weixin && taro build --type weapp && node scripts/fix-custom-wrapper.cjs"
+    "mp:dev": "cd mp-weixin && taro build --type weapp --watch",
+    "mp:check": "tsc -p mp-weixin/tsconfig.json --noEmit",
+    "mp:test": "node mp-weixin/scripts/test.cjs",
+    "mp:build": "cd mp-weixin && taro build --type weapp && node scripts/normalize-wxss-color.cjs && node scripts/replace-wxss-gap.cjs && node scripts/normalize-wxss-syntax.cjs && node scripts/verify-mp-runtime.cjs && node scripts/wxss-upload-gate.cjs && node -e \"const p=require('path');require('fs').copyFileSync('./.wbapp_t1U4NdF6I0IZdm8LzoMLq6.privacy.json',p.join(process.env.BEAUTY_MP_OUTPUT_DIR||'./dist','.wbapp_t1U4NdF6I0IZdm8LzoMLq6.privacy.json'))\""
   },
   "dependencies": {
     "@capacitor/core": "6.2.1",
     "@capacitor/ios": "6.2.1",
+    "@tencent-ai/workbuddy-cloud-sdk": "^0.1.2-dev.1b37f73.202609222026",
     "lucide-react": "^0.468.0",
     "lxgw-wenkai-screen-webfont": "^1.7.0",
     "react": "^18.3.1",
