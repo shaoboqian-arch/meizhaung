@@ -1,3 +1,3 @@
 export default definePageConfig({
-  navigationBarTitleText: "搭配分析"
+  navigationBarTitleText: "搭配"
 });

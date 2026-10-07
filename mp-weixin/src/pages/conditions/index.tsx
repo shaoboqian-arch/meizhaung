@@ -1,9 +1,17 @@
 import { Button, Image, Text, View } from "@tarojs/components";
 import { useDidShow } from "@tarojs/taro";
+import Taro from "@tarojs/taro";
 import { useState } from "react";
 import type { SkinConcern } from "@shared/types";
 import { skinConcernOptions } from "../../shared/constants";
-import { getSkinConcerns, setSkinConcerns } from "../../shared/storage";
+import {
+  getSkinConcerns,
+  needsCloudPull,
+  pullFromCloud,
+  setSkinConcerns,
+  getSyncHint,
+  runUserSyncAction
+} from "../../shared/storage";
 import "../../shared/page.css";
 import "./index.css";
 import heroCare from "../../assets/illustrations/hero-care.png";
@@ -71,33 +79,76 @@ const concernDescriptions: Record<SkinConcern, string> = {
 
 export default function ConditionsPage() {
   const [concerns, setConcerns] = useState<SkinConcern[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [cloudHint, setCloudHint] = useState<string>("未登录，数据只存本机");
 
   useDidShow(() => {
+    try {
     setConcerns(getSkinConcerns());
+    setCloudHint(getSyncHint());
+    // 已登录过的账号静默拉一次云端，让换设备时看到同样的肤质
+    if (needsCloudPull()) {
+      void pullFromCloud().then((result) => {
+        if (result.ok) {
+          setConcerns(getSkinConcerns());
+          setCloudHint(result.message);
+        }
+        else setCloudHint(result.message);
+      });
+    }
+    } catch (error) { setCloudHint(error instanceof Error ? error.message : "本机读取异常，原稿保留"); }
   });
 
   const toggleConcern = (concern: SkinConcern) => {
     const next = concerns.includes(concern)
       ? concerns.filter((item) => item !== concern)
       : [...concerns, concern];
-    setConcerns(next);
-    setSkinConcerns(next);
+    try { setSkinConcerns(next); setConcerns(next); setCloudHint(getSyncHint()); }
+    catch { Taro.showToast({ title: "保存失败，原稿保留", icon: "none" }); }
+  };
+
+  const runSync = async (mode: "save" | "read") => {
+    if (syncing) return;
+    setSyncing(true);
+    Taro.showToast({ title: mode === "save" ? "保存中…" : "读取中…", icon: "none" });
+    try {
+      const result = await runUserSyncAction(mode);
+      setCloudHint(result.message);
+      if (result.ok) setConcerns(getSkinConcerns());
+      Taro.showToast({ title: result.message, icon: result.ok ? "success" : "none" });
+    } catch (error) {
+      setCloudHint(error instanceof Error ? error.message : "同步失败，本机原稿保留");
+    } finally {
+      setSyncing(false);
+    }
   };
 
   return (
     <View className="page">
       <View className="skin-hero">
         <View className="hero-copy">
-          <Text className="hero-title">记录你的肌肤状态</Text>
+          <Text className="hero-title">我的护肤记录</Text>
           <Text className="hero-subtitle">选择感受，帮你匹配合适成分</Text>
         </View>
         <Image className="hero-art-image" src={heroCare} mode="aspectFit" />
       </View>
-      <View className="panel">
+      <View className="panel account-panel">
         <View className="section-title">
-          <Text>我的皮肤情况</Text>
-          <Text>本地保存</Text>
+          <Text>账号与同步</Text>
         </View>
+        <Text className="cloud-status">{cloudHint}</Text>
+        <View className="cloud-actions">
+          <View className="cloud-pair">
+            <Button className="cloud-action primary" onClick={() => runSync("save")} disabled={syncing}>保存</Button>
+            <Button className="cloud-action" onClick={() => runSync("read")} disabled={syncing}>读取</Button>
+          </View>
+        </View>
+        <Text className="cloud-note">
+          保存到云端，读取到本机。需要时自动微信登录；失败不丢本机内容。
+        </Text>
+      </View>
+      <View className="panel">
+        <View className="section-title"><Text>我的皮肤情况</Text><Text>{concerns.length} 项</Text></View>
         <View className="condition-grid">
           {skinConcernOptions.map((concern) => {
             const active = concerns.includes(concern);
@@ -105,13 +156,14 @@ export default function ConditionsPage() {
               <Button
                 className={active ? "condition-switch active" : "condition-switch"}
                 key={concern}
+                disabled={syncing}
                 onClick={() => toggleConcern(concern)}
               >
                 <View className="condition-illustration">
                   <Image
                     className="condition-image"
                     src={conditionImages[illustrationClassMap[concern]]}
-                    mode="aspectFit"
+                    mode="aspectFill"
                   />
                 </View>
                 <View className="condition-copy">

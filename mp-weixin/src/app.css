@@ -1,7 +1,7 @@
 page {
   background: #fbf6ef;
   color: #322721;
-  font-family: "LXGW WenKai Screen R", "HarmonyOS Sans SC", "MiSans", "OPPO Sans", "vivo Sans", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: "LXGW WenKai Screen R", "LXGW WenKai Screen", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 view,
@@ -15,8 +15,13 @@ image {
 }
 
 button {
+  margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
   line-height: 1.35;
+  font-family: inherit;
 }
+
+/* 微信按钮默认描边来自伪元素，border:0 本身不会清除它。 */
+button::after { border: 0; }

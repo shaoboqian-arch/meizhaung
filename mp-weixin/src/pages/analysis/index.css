@@ -20,6 +20,10 @@
   box-shadow: 0 0 0 4px rgba(232, 111, 92, 0.08), 0 10px 22px rgba(116, 74, 52, 0.08);
 }
 
+.selected-row > view { flex: 1; min-width: 0; }
+.selected-row .card-title { display: block; }
+.selected-row .muted { display: block; margin-top: 4px; font-size: 18px; }
+
 .category-row {
   font-size: 21px;
 }
@@ -38,12 +42,7 @@
 }
 
 .advantage {
-  padding: 13px;
-  border: 1px solid rgba(105, 72, 58, 0.12);
-  border-radius: 14px;
-  background: linear-gradient(180deg, #fffefb, #fff8f1);
-  box-shadow: 0 8px 18px rgba(116, 74, 52, 0.07);
-  animation: bFadeUp 0.48s ease both;
+  padding: 8px 0;
 }
 
 .sub-title {
@@ -51,21 +50,19 @@
 }
 
 .coverage-card {
-  margin-top: 10px;
-  padding: 13px;
-  border: 1px solid rgba(105, 72, 58, 0.12);
-  border-left: 5px solid #3aa987;
-  border-radius: 14px;
-  background: #fffdf9;
+  margin: 0;
+  padding: 14px 0;
+  border: 0;
+  background: transparent;
 }
 
-.coverage-card.推荐补入 {
-  border-left-color: #e86f5c;
-  background: #fff8f2;
+/* 类名用英文：微信 WXSS 选择器不支持中文标识符 */
+.coverage-card.recommended .card-title {
+  color: #b85845;
 }
 
-.coverage-card.暂未覆盖 {
-  border-left-color: #c78a2c;
+.coverage-card.uncovered .card-title {
+  color: #9c7429;
 }
 
 .coverage-head {
@@ -85,19 +82,13 @@
 }
 
 .analysis-card {
-  border-left: 5px solid #9a7a6d;
-}
-
-.analysis-card.match {
-  border-left-color: #3aa987;
-}
-
-.analysis-card.caution {
-  border-left-color: #c78a2c;
-}
-
-.analysis-card.offset {
-  border-left-color: #d75c50;
+  border: 0;
+  border-radius: 0;
+  padding: 10px 0;
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
 }
 
 .analysis-type {
@@ -114,4 +105,68 @@
 
 .recommend-card .reason {
   padding-top: 2px;
+}
+
+.scene-tabs { display: flex; width: 100%; }
+.scene-tab { flex: 1; margin: 0; padding: 12px 0; border: 0; border-radius: 28px; background: #f5eee7; color: #8b7469; font-size: 23px; line-height: 1.5; }
+.scene-tab + .scene-tab { margin-left: 14px; }
+.scene-tab.active { background: #e98265; color: #ffffff; }
+.scene-note { display: block; margin-top: 12px; line-height: 1.6; }
+.scene-other-disclosure > .disclosure-body { padding-top: 24px; }
+.other-note-section + .other-note-section { margin-top: 36px; }
+.other-note-head { display: flex; align-items: center; justify-content: space-between; }
+.other-note-heading { display: block; font-size: 25px; font-weight: 650; color: #946044; }
+.other-note-count { margin-left: 16px; font-size: 18px; color: #8b7469; flex-shrink: 0; }
+.other-selection-row, .alternative-row { padding: 0; margin-top: 20px; border: 0; background: transparent; box-shadow: none; }
+.other-product-head { display: flex; align-items: flex-start; }
+.other-product-name { display: block; flex: 1; min-width: 0; font-size: 22px; line-height: 1.5; font-weight: 600; }
+.other-product-category { margin-left: 16px; padding-top: 3px; font-size: 18px; line-height: 1.5; color: #8b7469; flex-shrink: 0; }
+.other-note-body { display: block; margin-top: 8px; font-size: 20px; line-height: 1.75; color: #715b4f; }
+.other-note-intro { display: block; margin-top: 8px; font-size: 19px; line-height: 1.6; color: #8b7469; }
+.other-advantage-row { display: flex; align-items: flex-start; margin-top: 16px; }
+.other-advantage-index { width: 28px; flex-shrink: 0; font-size: 20px; line-height: 1.75; color: #946044; }
+.other-advantage-row .advantage { flex: 1; min-width: 0; padding: 0; margin-top: 0; }
+.alternative-row .other-product-head { align-items: baseline; }
+.alternative-row .other-product-name { flex: 0 1 auto; }
+.alternative-row .other-product-category { margin-left: auto; padding-left: 16px; }
+.other-note-actions { display: flex; flex-shrink: 0; margin-left: 16px; }
+.other-note-actions .alternative-replace { margin: 0; padding: 0; min-height: 0; display: block; border: 0; border-radius: 0; background: transparent; color: #946044; font-size: 20px; line-height: 1.5; text-decoration: underline; }
+.other-reset-actions { margin-top: 28px; }
+.other-reset-actions .scene-reset { width: 100%; margin: 0; }
+.other-notice-section { margin-top: 24px; }
+.other-note-caption { display: block; font-size: 18px; font-weight: 600; color: #8b7469; }
+.other-notice-section .scene-note { margin-top: 8px; font-size: 19px; }
+.alternative-replace, .scene-reset { margin: 10px 0 0; padding: 8px 14px; background: #f5eee7; color: #946044; font-size: 20px; line-height: 1.5; border: 0; border-radius: 20px; }
+.scene-tab::after, .alternative-replace::after, .scene-reset::after { border: 0; }
+
+.disclosure-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  padding: 0;
+  margin: 0;
+  min-height: 70px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  line-height: 1.45;
+}
+.disclosure-copy { flex: 1; min-width: 0; }
+.disclosure-toggle .card-title { display: block; word-break: break-all; }
+.disclosure-summary { display: block; margin-top: 7px; line-height: 1.45; }
+.disclosure-label { width: 86px; text-align: right; color: #946044; font-size: 19px; margin-left: 12px; flex-shrink: 0; }
+.disclosure-body { padding-top: 12px; }
+.analysis-group { margin: 0; border: 0; padding: 14px 0; }
+.analysis-group.caution .disclosure-toggle .card-title { color: #9c7429; }
+.analysis-group.match .disclosure-toggle .card-title { color: #397c67; }
+.recommend-card,
+.recommend-card.overlap {
+  border: 0;
+  border-radius: 0;
+  padding: 14px 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
 }
