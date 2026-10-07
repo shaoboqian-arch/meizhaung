@@ -18,7 +18,7 @@ export const recognizeIngredientImage = async (savedFilePath: string): Promise<s
   let source = savedFilePath;
   try {
     const compressed = await Taro.compressImage({ src: savedFilePath, quality: 40 });
-    if (compressed?.filePath) source = compressed.filePath;
+    if (compressed?.tempFilePath) source = compressed.tempFilePath;
   } catch {
     // 压缩不可用时用原图，由服务端做大小兜底。
   }
