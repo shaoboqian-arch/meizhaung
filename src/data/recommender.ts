@@ -344,7 +344,7 @@ const removeHardConflicts = (
   return nextIds;
 };
 
-const buildUsagePlan = (
+export const buildUsagePlan = (
   product: Product,
   ingredients: Ingredient[],
   applyIndex: number,
