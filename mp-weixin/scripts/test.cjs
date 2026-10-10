@@ -7,7 +7,7 @@ const esbuild = require("esbuild");
 const root = path.resolve(__dirname, "../..");
 const out = fs.mkdtempSync(path.join(os.tmpdir(), "beauty-mp-tests-"));
 esbuild.build({
-  entryPoints: [path.join(root, "mp-weixin/tests/round1.test.tsx"), path.join(root, "mp-weixin/tests/round2.test.ts"), path.join(root, "mp-weixin/tests/ocr-client.test.ts"), path.join(root, "mp-weixin/tests/wxsession-client.test.ts")],
+  entryPoints: [path.join(root, "mp-weixin/tests/round1.test.tsx"), path.join(root, "mp-weixin/tests/round2.test.ts"), path.join(root, "mp-weixin/tests/ocr-client.test.ts"), path.join(root, "mp-weixin/tests/wxsession-client.test.ts"), path.join(root, "mp-weixin/tests/reference-photo.test.ts")],
   bundle: true, platform: "node", format: "cjs", jsx: "automatic",
   outdir: out, outExtension: { ".js": ".cjs" }, tsconfig: path.join(root, "mp-weixin/tsconfig.json"),
   plugins: [{ name: "offline-mini-boundaries", setup(build) {
@@ -21,6 +21,13 @@ esbuild.build({
   } }]
 }).then(() => {
   console.log(`Offline test bundle: ${out}`);
-  const result = spawnSync(process.execPath, ["--test", path.join(out, "round1.test.cjs"), path.join(out, "round2.test.cjs"), path.join(out, "ocr-client.test.cjs"), path.join(out, "wxsession-client.test.cjs")], { stdio: "inherit" });
-  process.exitCode = result.status ?? 1;
+  // node18 的 --test 子进程 TAP 解析器吃不下中文用例名（ERR_TAP_LEXER_ERROR）；
+  // 直接逐个执行 bundle（spec 报告器），聚合失败数作退出码。
+  const bundles = ["round1.test.cjs", "round2.test.cjs", "ocr-client.test.cjs", "wxsession-client.test.cjs", "reference-photo.test.cjs"];
+  let failed = 0;
+  for (const name of bundles) {
+    const result = spawnSync(process.execPath, [path.join(out, name)], { stdio: "inherit" });
+    if (result.status !== 0) failed += 1;
+  }
+  process.exitCode = failed ? 1 : 0;
 }).catch((error) => { console.error(error); process.exitCode = 1; });

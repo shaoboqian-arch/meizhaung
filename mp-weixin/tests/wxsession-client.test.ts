@@ -1,78 +1,49 @@
-// 微信身份 + 内容安全客户端契约：解析纯函数 + checkContentBeforeSave 阻断/放行矩阵。
-// Taro 在测试运行器里被替换为 tests/mocks/taro.ts（内存存储 + 合成 login code）。
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import Taro from "@tarojs/taro";
-import { ContentBlockedError, checkContentBeforeSave, parseSecCheckResponse, parseSessionResponse } from "../src/shared/wxsession";
-
-test("session 解析：200 且有 openid 原样返回；错误透出服务端文案", () => {
-  assert.equal(parseSessionResponse(200, { ok: true, openid: "o".repeat(28) }), "o".repeat(28));
-  assert.throws(() => parseSessionResponse(400, { error: "微信登录已过期，请重试。" }), /已过期/);
-  assert.throws(() => parseSessionResponse(503, { error: "微信登录服务未配置，请稍后再试。" }), /未配置/);
-  assert.throws(() => parseSessionResponse(200, {}), /身份获取失败/);
-  assert.throws(() => parseSessionResponse(200, { openid: "" }), /身份获取失败/);
+import { checkContentBeforeSave, parseSecCheckResponse, parseSessionResponse, ensureProcessingSession, PROCESSING_SESSION_KEY } from "../src/shared/wxsession";
+const session = () => ({ openid: 'o' + 'x'.repeat(27), processingToken: 'wxc_synthetic.' + 'a'.repeat(64), expiresAt: Date.now() + 60_000 });
+test('微信身份解析必须有完整 openid，错误和损坏回执拒绝', () => {
+ assert.equal(parseSessionResponse(200,{openid:'o'.repeat(28)}),'o'.repeat(28));
+ for (const data of [{},null,{openid:''},{openid:'short'}]) assert.throws(()=>parseSessionResponse(200,data));
+ assert.throws(()=>parseSessionResponse(503,{error:'服务未配置'}),/未配置/);
 });
-
-test("sec-check 解析：200 放行；400 阻断并透出文案；其余状态一律放行", () => {
-  assert.equal(parseSecCheckResponse(200, { ok: true }), "");
-  assert.equal(parseSecCheckResponse(400, { error: "内容包含违规信息，请修改后再保存。" }), "内容包含违规信息，请修改后再保存。");
-  assert.equal(parseSecCheckResponse(400, {}), "内容未通过安全校验，请修改后再保存。");
-  assert.equal(parseSecCheckResponse(429, { error: "操作过于频繁，请稍后再试。" }), "", "限流放行，与故障放行约定一致");
-  assert.equal(parseSecCheckResponse(502, null), "");
+test('内容预检只接受明确通过，旧 unchecked、待处理、空回执和故障均拒绝', () => {
+ assert.equal(parseSecCheckResponse(200,{ok:true}),'');
+ for (const data of [{ok:true,unchecked:true},{ok:true,pending:true},{},null,[],{ok:false}]) assert.ok(parseSecCheckResponse(200,data));
+ for (const status of [401,429,500,502,503]) assert.ok(parseSecCheckResponse(status,{error:'待处理'}));
+ assert.match(parseSecCheckResponse(400,{error:'内容违规'}),/违规/);
 });
-
-test("checkContentBeforeSave：空内容直接放行，不发请求", async () => {
-  const requests: unknown[] = [];
-  const original = Taro.request;
-  Taro.request = (async (options: never) => { requests.push(options); return { statusCode: 200, data: { ok: true } }; }) as never;
-  try {
-    await checkContentBeforeSave(["", "  ", null, undefined]);
-    assert.equal(requests.length, 0);
-  } finally { Taro.request = original; }
-});
-
-test("checkContentBeforeSave：微信裁决违规时阻断并带文案；故障放行", async () => {
-  const original = Taro.request;
-  // 违规：/sec-check 返回 400 risky → 抛 ContentBlockedError（session 端点正常发 openid）
-  Taro.request = (async (options: { url: string }) => {
-    if (options.url.includes("/wechat/session")) return { statusCode: 200, data: { ok: true, openid: "o" + "x".repeat(27) } };
-    return { statusCode: 400, data: { error: "内容包含违规信息，请修改后再保存。" } };
-  }) as never;
-  try {
-    await checkContentBeforeSave(["违规产品"]).then(
-      () => assert.fail("应当阻断"),
-      (error) => { assert.ok(error instanceof Error); assert.match(error.message, /违规/); }
-    );
-  } finally { Taro.request = original; }
-  // 网络异常 → 放行不抛
-  Taro.request = (async () => { throw new Error("request:fail"); }) as never;
-  try {
-    await checkContentBeforeSave(["正常产品"]);
-  } finally { Taro.request = original; }
-  // 5xx → 放行
-  Taro.request = (async () => ({ statusCode: 502, data: {} })) as never;
-  try {
-    await checkContentBeforeSave(["正常产品"]);
-  } finally { Taro.request = original; }
-});
-
-test("checkContentBeforeSave：openid 缓存命中后请求带 X-WX-Openid 头", async () => {
-  const original = Taro.request;
-  const seen: Array<Record<string, unknown>> = [];
-  Taro.request = (async (options: { url: string; header?: Record<string, string>; data?: unknown }) => {
-    seen.push({ url: options.url, header: options.header ?? {}, data: options.data });
-    if (options.url.includes("/wechat/session")) return { statusCode: 200, data: { ok: true, openid: "o" + "x".repeat(27) } };
-    return { statusCode: 200, data: { ok: true } };
-  }) as never;
-  try {
-    // 先清缓存（mock 的 storage 是内存 Map，写入一个已知键覆盖即可）
-    Taro.setStorageSync("beauty.wx.openid.v1", "o" + "x".repeat(27));
-    await checkContentBeforeSave(["品牌A", "型号B"]);
-    assert.equal(seen.length, 1, "缓存命中时不得再调 /wechat/session");
-    assert.match(seen[0].url as string, /\/sec-check$/);
-    assert.equal((seen[0].header as Record<string, string>)["X-WX-Openid"], "o" + "x".repeat(27));
-    assert.equal((seen[0].data as { content: string }).content, "品牌A\n型号B");
-  } finally {
-    Taro.request = original;
+test('内容为空不发请求；有内容时限流、网络故障和异常回执不能放行', async () => {
+ const original=Taro.request; let calls=0;Taro.setStorageSync(PROCESSING_SESSION_KEY,session());
+ try {
+  Taro.request=(async()=>{calls++;throw new Error('network down');}) as never;
+  await checkContentBeforeSave(['',null]);assert.equal(calls,0);
+  await assert.rejects(checkContentBeforeSave(['合成产品']),/草稿已保留/);
+  for (const reply of [{statusCode:429,data:{error:'请求过频'}},{statusCode:503,data:{}},{statusCode:200,data:{ok:true,unchecked:true}},{statusCode:400,data:{error:'内容违规'}}]) {
+   Taro.request=(async()=>reply) as never;await assert.rejects(checkContentBeforeSave(['合成产品']));
   }
+ } finally {Taro.request=original;}
+});
+test('缓存处理凭证发 Authorization，不相信前端自行填写 openid', async () => {
+ const original=Taro.request;const identity=session();Taro.setStorageSync(PROCESSING_SESSION_KEY,identity);const requests:any[]=[];
+ Taro.request=(async options=>{requests.push(options);return {statusCode:200,data:{ok:true}};}) as never;
+ try {await checkContentBeforeSave(['品牌','型号']);assert.equal(requests.length,1);assert.equal(requests[0].header.Authorization,'Bearer '+identity.processingToken);assert.equal(requests[0].header['X-WX-Openid'],undefined);}
+ finally {Taro.request=original;}
+});
+test('处理凭证读取失败不得触发登录或覆盖未知缓存', async () => {
+ const original=Taro.getStorageSync;const request=Taro.request;let requests=0;
+ Taro.getStorageSync=(()=>{throw new Error('storage unavailable');}) as never;Taro.request=(async()=>{requests++;return {} as never;}) as never;
+ try {await assert.rejects(ensureProcessingSession(),/storage unavailable/);assert.equal(requests,0);}
+ finally {Taro.getStorageSync=original;Taro.request=request;}
+});
+test('旧服务只返回 openid 时拒绝；存储写入失败也不假装获得身份', async () => {
+ const request=Taro.request;const set=Taro.setStorageSync;Taro.setStorageSync(PROCESSING_SESSION_KEY,'');
+ try {
+  Taro.request=(async()=>({statusCode:200,data:{openid:'o'.repeat(28)}})) as never;
+  await assert.rejects(ensureProcessingSession(),/有效处理凭证/);
+  Taro.request=(async()=>({statusCode:200,data:session()})) as never;
+  Taro.setStorageSync=(()=>{throw new Error('write failed');}) as never;
+  await assert.rejects(ensureProcessingSession(),/write failed/);
+ } finally {Taro.request=request;Taro.setStorageSync=set;}
 });

@@ -7,6 +7,7 @@ export const setTestNavigator = (fn: (url: string) => void) => { navigator = fn;
 const Taro = {
   getStorageSync: (key: string) => memory.has(key) ? memory.get(key) : "",
   setStorageSync: (key: string, value: unknown) => memory.set(key, JSON.parse(JSON.stringify(value))),
+  getStorageInfoSync: () => ({keys:[...memory.keys()]}),
   getAccountInfoSync: () => ({ miniProgram: { appId: "test-appid" } }),
   showToast: () => {}, showModal: async () => ({ confirm: true }),
   navigateTo: async ({ url }: { url: string }) => { navigator?.(url); },

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import Taro from "@tarojs/taro";
+import { PROCESSING_SESSION_KEY } from "../src/shared/wxsession";
 import { OCR_ENDPOINT, parseOcrHttpResponse, recognizeIngredientImage } from "../src/shared/ocr";
 
 test("OCR 响应解析：200 且有 text 时原样返回", () => {
@@ -22,6 +23,8 @@ for (const mode of ["compressed", "compression-failed", "empty-image"] as const)
       getFileSystemManager: Taro.getFileSystemManager,
       request: Taro.request
     };
+    const token = "wxc_synthetic." + "a".repeat(64);
+    Taro.setStorageSync(PROCESSING_SESSION_KEY, { openid: "o".repeat(28), processingToken: token, expiresAt: Date.now()+60_000 });
     const readPaths: string[] = [];
     const requests: unknown[] = [];
     Object.assign(Taro, {
@@ -48,7 +51,7 @@ for (const mode of ["compressed", "compression-failed", "empty-image"] as const)
         assert.equal(await recognizeIngredientImage("synthetic-original.jpg"), "烟酰胺");
         assert.deepEqual(requests, [{
           url: OCR_ENDPOINT, method: "POST", timeout: 20000,
-          header: { "Content-Type": "application/json" }, data: { imageBase64: "synthetic-base64" }
+          header: { "Content-Type": "application/json", Authorization: "Bearer " + token }, data: { imageBase64: "synthetic-base64" }
         }]);
       }
       assert.deepEqual(readPaths, [mode === "compression-failed" ? "synthetic-original.jpg" : "synthetic-compressed.jpg"]);
@@ -57,3 +60,13 @@ for (const mode of ["compressed", "compression-failed", "empty-image"] as const)
     }
   });
 }
+
+
+test('OCR quota exhaustion retains the specific server explanation',()=>{
+ assert.throws(()=>parseOcrHttpResponse(429,{error:'今天的识别额度已用完，仍可手动填写成分。'}),/今天的识别额度/);
+});
+test('oversized local image never requests a processing identity or paid OCR',async()=>{
+ const originals={compressImage:Taro.compressImage,getFileSystemManager:Taro.getFileSystemManager,request:Taro.request};let calls=0;
+ Object.assign(Taro,{compressImage:async()=>({tempFilePath:'compressed'}),getFileSystemManager:()=>({readFileSync:()=> 'a'.repeat(7000000)}),request:async()=>{calls++;throw new Error('must not request');}});
+ try{await assert.rejects(recognizeIngredientImage('original'),/照片过大.*保留/);assert.equal(calls,0);}finally{Object.assign(Taro,originals);}
+});
