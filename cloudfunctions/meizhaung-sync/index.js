@@ -1,4 +1,7 @@
 const crypto = require("crypto");
+const processingQuota = require("./processingQuota");
+const { parseImageBase64 } = require("./imagePayload");
+const { issueProcessingIdentity, verifyProcessingIdentity } = require("./processingIdentity");
 const express = require("express");
 const cloudbase = require("@cloudbase/node-sdk");
 const {
@@ -46,7 +49,7 @@ function applyCors(request, response) {
     response.set("Vary", "Origin");
   }
   response.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  response.set("Access-Control-Allow-Headers", "Content-Type, X-Routine-Edit-Credential");
+  response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Routine-Edit-Credential");
   response.set("Cache-Control", "no-store");
 }
 
@@ -55,17 +58,6 @@ function pruneRateLimitWindows(now) {
   if (requestWindows.size < 500) return;
   for (const [key, window] of requestWindows) {
     if (now - window.startedAt > 60_000) requestWindows.delete(key);
-  }
-}
-
-// OCR 消耗付费配额，单独限流（每 IP 每分钟 12 次），与通用限流分开计数。
-const ocrWindows = new Map();
-const OCR_RATE_LIMIT = 12;
-
-function pruneOcrWindows(now) {
-  if (ocrWindows.size < 500) return;
-  for (const [key, window] of ocrWindows) {
-    if (now - window.startedAt > 60_000) ocrWindows.delete(key);
   }
 }
 
@@ -194,7 +186,8 @@ async function createUniqueCode() {
 }
 
 server.get("/health", (_request, response) => {
-  response.json({ ok: true, service: "meizhaung-routine-sync" });
+  response.json({ ok: true, service: "meizhaung-routine-sync", sourceSha:process.env.MEIZHAUNG_SOURCE_SHA || "unversioned",
+    processingBudgetRule:processingQuota.RULE_VERSION, processingBudgetConfigured:Boolean(processingQuota.resolvePolicy("ocr")) });
 });
 
 server.post("/combinations", async (request, response) => {
@@ -318,32 +311,23 @@ server.delete("/combinations/:code/edit-credential", async (request, response) =
 
 server.post("/ocr", express.json({ limit: "8mb" }), async (request, response) => {
   try {
-    const clientKey = request.get("x-forwarded-for")?.split(",")[0]?.trim() || request.ip || "unknown";
-    const now = Date.now();
-    pruneOcrWindows(now);
-    const window = ocrWindows.get(clientKey);
-    if (!window || now - window.startedAt > 60_000) {
-      ocrWindows.set(clientKey, { count: 1, startedAt: now });
-    } else {
-      window.count += 1;
-      if (window.count > OCR_RATE_LIMIT) return response.status(429).json({ error: "识别请求过于频繁，请稍后再试。" });
-    }
-
-    const imageBase64 = request.body?.imageBase64;
-    if (typeof imageBase64 !== "string" || imageBase64.length < 64) {
-      return response.status(400).json({ error: "请上传图片后重试。" });
-    }
-    if (imageBase64.length > 7_000_000) {
-      return response.status(413).json({ error: "图片过大，请压缩后重试。" });
-    }
-
+    const identitySecret = resolveWxSecret();
+    if (!identitySecret) return response.status(503).json({ error: "微信身份服务暂不可用，请稍后重试。" });
+    const identity = verifyProcessingIdentity(request.get('authorization')?.replace(/^Bearer\s+/i, '') || '', identitySecret);
+    if (!identity) return response.status(401).json({ error: "识别身份已失效，请重试；参考照片仍在本机。" });
+    const imageBase64 = parseImageBase64(request.body?.imageBase64);
     const credentials = resolveOcrCredentials();
     if (!credentials) {
       return response.status(503).json({ error: friendlyOcrError("OCR_CREDENTIALS_MISSING") });
     }
+    await processingQuota.reserveQuota({database,operation:'ocr',authorize:()=> 'wx:'+identity.openid});
     const result = await callGeneralBasicOcr({ imageBase64, credentials });
     return response.json({ ok: true, text: result.text, itemCount: result.itemCount });
   } catch (error) {
+    if (error.statusCode) {
+      if (error.retryAfter) response.set('Retry-After',String(error.retryAfter));
+      return response.status(error.statusCode).json({error:error.message,code:error.code || 'invalidImage'});
+    }
     const code = error instanceof Error ? error.message : "";
     if (code === "OCR_TIMEOUT") return response.status(504).json({ error: "识别超时，请稍后再试。" });
     if (code === "FailedOperation_ImageNoText") {
@@ -362,10 +346,9 @@ server.post("/ocr", express.json({ limit: "8mb" }), async (request, response) =>
 
 // —— 微信内容安全（msgSecCheck）链路，供小程序保存手输内容前调用 ——
 // POST /wechat/session：wx.login 的 code 换 openid（session_key 只留在服务端内存，不回传）。
-// POST /sec-check：{content} + X-WX-Openid 头 → 微信审核裁决。
+// POST /sec-check：{content} + 服务器签发的处理凭证 → 微信审核裁决。
 //   * 裁决为 risky / badOpenid → 400 拒绝；rateLimited → 429；
-//   * 审核基础设施故障（微信侧 5xx、token 异常）→ 放行并记日志（个人工具向应用，
-//     审核通道故障不应冻结全部保存；risky 裁决始终拦截，合规底线不破）。
+//   * 审核基础设施故障返回 503 待处理；只允许明确 pass 进入完成状态。
 //   * Web 端无微信身份，不走这两个端点（微信审核只辖小程序内 UGC）。
 const SEC_CHECK_MAX_CONTENT = 8000;
 
@@ -380,9 +363,9 @@ server.post("/wechat/session", async (request, response) => {
       // 40029=code 无效/已用；不区分细分原因，客户端统一引导重试。
       return response.status(400).json({ error: "微信登录已过期，请重试。", errcode: session.errcode });
     }
-    return response.json({ ok: true, openid: session.openid });
+    return response.json({ ok: true, openid: session.openid, ...issueProcessingIdentity(session.openid, secret) });
   } catch (error) {
-    console.log("[WxSession] error", error instanceof Error ? error.message : "unknown");
+    console.log("[WxSession] unavailable");
     return response.status(502).json({ error: "微信登录服务暂时不可用，请稍后再试。" });
   }
 });
@@ -392,10 +375,11 @@ server.post("/sec-check", async (request, response) => {
     const content = typeof request.body?.content === "string" ? request.body.content.trim() : "";
     if (!content) return response.status(400).json({ error: "没有需要审核的内容。" });
     if (content.length > SEC_CHECK_MAX_CONTENT) return response.status(400).json({ error: "内容过长，请精简后再保存。" });
-    const openid = request.get("x-wx-openid") || "";
-    if (!OPENID_PATTERN.test(openid)) return response.status(400).json({ error: "微信身份已失效，请退出小程序重新进入后再试。" });
     const secret = resolveWxSecret();
-    if (!secret) return response.status(503).json({ error: "内容审核服务未配置，请稍后再试。" });
+    if (!secret) return response.status(503).json({ error: "内容校验服务暂不可用，草稿仍在本机。" });
+    const identity = verifyProcessingIdentity(request.get('authorization')?.replace(/^Bearer\s+/i, '') || '', secret);
+    if (!identity) return response.status(401).json({ error: "内容校验身份已失效，请重试；草稿仍在本机。" });
+    const openid = identity.openid;
 
     let data = await msgSecCheck({ content, openid, secret });
     let verdict = classifySecCheck(data);
@@ -408,10 +392,10 @@ server.post("/sec-check", async (request, response) => {
     if (verdict.verdict === "risky" || verdict.verdict === "badOpenid") return response.status(400).json({ error: verdict.message });
     if (verdict.verdict === "rateLimited") return response.status(429).json({ error: verdict.message });
     console.log("[SecCheck] infra fallback errcode=", Number(data?.errcode ?? -1));
-    return response.json({ ok: true, unchecked: true });
+    return response.status(503).json({ ok: false, pending: true, error: "内容校验暂未完成，草稿已保留，请稍后重试。" });
   } catch (error) {
-    console.log("[SecCheck] error", error instanceof Error ? error.message : "unknown");
-    return response.json({ ok: true, unchecked: true });
+    console.log("[SecCheck] unavailable");
+    return response.status(503).json({ ok: false, pending: true, error: "内容校验暂未完成，草稿已保留，请稍后重试。" });
   }
 });
 

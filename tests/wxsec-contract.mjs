@@ -92,7 +92,7 @@ test("msgSecCheck：v2 请求体带 scene/openid/content，content 超长截断"
 
 test("classifySecCheck：裁决映射齐全", () => {
   assert.deepEqual(classifySecCheck({ errcode: 0, result: { suggest: "pass" } }).verdict, "pass");
-  assert.deepEqual(classifySecCheck({ errcode: 0, result: { suggest: "review" } }).verdict, "pass", "review 疑似也放行");
+  assert.deepEqual(classifySecCheck({ errcode: 0, result: { suggest: "review" } }).verdict, "pending", "review 疑似也放行");
   assert.equal(classifySecCheck({ errcode: 0, result: { suggest: "risky" } }).verdict, "risky");
   assert.match(classifySecCheck({ errcode: 0, result: { suggest: "risky" } }).message, /违规/);
   assert.equal(classifySecCheck({ errcode: 40003 }).verdict, "badOpenid");

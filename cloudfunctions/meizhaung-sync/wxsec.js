@@ -92,10 +92,11 @@ async function msgSecCheck({ content, openid, secret, fetchImpl = fetch, now = D
 function classifySecCheck(data) {
   const errcode = Number(data?.errcode ?? -1);
   if (errcode === 0) {
-    const suggest = String(data?.result?.suggest || "pass");
+    const suggest = data?.result?.suggest;
     if (suggest === "risky") return { verdict: "risky", message: "内容包含违规信息，请修改后再保存。" };
-    // pass 与 review（疑似）都放行；review 只在日志层面关注。
-    return { verdict: "pass", suggest };
+    if (suggest === "pass") return { verdict: "pass", suggest };
+    if (suggest === "review") return { verdict: "pending", message: "内容仍待校验，草稿已保留，请稍后重试。" };
+    return { verdict: "infra", message: "" };
   }
   if (errcode === 40003 || errcode === 61010) {
     return { verdict: "badOpenid", message: "微信身份已失效，请退出小程序重新进入后再试。" };
