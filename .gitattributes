@@ -1,0 +1,2 @@
+# 跨仓逐字节一致性契约：与健身仓同名文件必须逐字节相同（mp-weixin/tests? / 健身 test/hhid-client.test.mjs）
+mp-weixin/src/shared/hhid-client-core.js eol=lf
