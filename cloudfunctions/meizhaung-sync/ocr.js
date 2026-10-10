@@ -64,11 +64,13 @@ function normalizeOcrResponse(payload) {
   return { text: lines.join("\n"), itemCount: lines.length, language: response.Language || "" };
 }
 
+// 面向用户的文案一律不暴露运维细节（密钥/权限/环境变量属服务端事务）；
+// 凭证与权限类故障对用户表现统一为"服务暂不可用"，排障信息走服务端日志。
 const FRIENDLY_ERRORS = {
-  OCR_CREDENTIALS_MISSING: "识别服务未配置，请先在云函数环境变量中配置 OCR 密钥。",
-  AuthFailure_SignatureFailure: "OCR 密钥无效，请检查环境变量中的密钥配置。",
-  AuthFailure_UnauthorizedOperation: "OCR 密钥没有文字识别权限，请在访问管理中授权。",
-  UnauthorizedOperation: "OCR 密钥没有文字识别权限，请在访问管理中授权。",
+  OCR_CREDENTIALS_MISSING: "识别服务暂时不可用，请稍后再试。",
+  AuthFailure_SignatureFailure: "识别服务暂时不可用，请稍后再试。",
+  AuthFailure_UnauthorizedOperation: "识别服务暂时不可用，请稍后再试。",
+  UnauthorizedOperation: "识别服务暂时不可用，请稍后再试。",
   LimitExceeded: "识别调用超出限额，请稍后再试。",
   RequestSizeLimitExceeded: "图片过大，请压缩后重试。",
   FailedOperation_ImageNoText: "没有识别到文字，请换一张更清晰、正对成分表的图片。",
@@ -78,7 +80,7 @@ const FRIENDLY_ERRORS = {
 function friendlyOcrError(code) {
   if (!code) return "识别服务暂时不可用，请稍后再试。";
   if (FRIENDLY_ERRORS[code]) return FRIENDLY_ERRORS[code];
-  if (code.startsWith("AuthFailure")) return "OCR 密钥无效或无权限，请检查环境变量中的密钥配置。";
+  if (code.startsWith("AuthFailure")) return "识别服务暂时不可用，请稍后再试。";
   if (code.startsWith("LimitExceeded")) return "识别调用超出限额，请稍后再试。";
   if (code.startsWith("FailedOperation")) return "识别失败，请换一张更清晰、正对成分表的图片。";
   return "识别服务暂时不可用，请稍后再试。";

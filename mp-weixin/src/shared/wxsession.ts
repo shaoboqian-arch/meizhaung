@@ -27,8 +27,12 @@ function validProcessingSession(value: unknown): value is ProcessingSession {
 export async function ensureProcessingSession(): Promise<ProcessingSession> {
   const cached = Taro.getStorageSync(PROCESSING_SESSION_KEY);
   if (cached !== '' && cached !== undefined && cached !== null) {
-    if (!validProcessingSession(cached)) throw new Error("本机处理凭证读取异常，草稿与照片已保留，请重试。");
-    if (cached.expiresAt > Date.now()) return cached;
+    if (validProcessingSession(cached)) {
+      if (cached.expiresAt > Date.now()) return cached;
+    } else {
+      // 坏缓存自愈：历史格式或写坏的凭证直接清掉走重新登录，不让用户永久卡在"读取异常"。
+      Taro.removeStorageSync(PROCESSING_SESSION_KEY);
+    }
   }
   const login = await Taro.login();
   if (!login.code) throw new Error("微信身份获取失败，请重试；草稿与照片已保留。");

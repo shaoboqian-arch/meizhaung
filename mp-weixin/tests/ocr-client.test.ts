@@ -9,9 +9,10 @@ test("OCR 响应解析：200 且有 text 时原样返回", () => {
   assert.equal(parseOcrHttpResponse(200, { ok: true, text: "", itemCount: 0 }), "");
 });
 
-test("OCR 响应解析：限流与错误文案不误导用户", () => {
+test("OCR 响应解析：限流与错误文案不误导用户，运维细节不透出", () => {
   assert.throws(() => parseOcrHttpResponse(429, { error: "识别请求过于频繁，请稍后再试。" }), /过于频繁/);
-  assert.throws(() => parseOcrHttpResponse(503, { error: "识别服务未配置，请先在云函数环境变量中配置 OCR 密钥。" }), /未配置/);
+  assert.throws(() => parseOcrHttpResponse(503, { error: "识别服务暂时不可用，请稍后再试。" }), /暂时不可用/);
+  assert.throws(() => parseOcrHttpResponse(503, { error: "OCR 密钥无效，请检查环境变量中的密钥配置。" }), /请检查环境变量/); // 历史服务端返回的运维文案仍原样透出（客户端不加工），升级服务端后消失
   assert.throws(() => parseOcrHttpResponse(502, {}), /暂时不可用/);
   assert.throws(() => parseOcrHttpResponse(500, "bad gateway text"), /暂时不可用/);
 });
