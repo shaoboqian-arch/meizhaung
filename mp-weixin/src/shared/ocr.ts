@@ -1,4 +1,5 @@
 import Taro from "@tarojs/taro";
+import { processingHeaders } from "./wxsession";
 
 // 拍照识别成分：照片压缩后经同步云函数 /ocr 转发至腾讯云通用印刷体识别。
 // 契约：POST { imageBase64 } → 200 { ok, text, itemCount } | 4xx/5xx { error }。
@@ -9,7 +10,7 @@ export const OCR_ENDPOINT = "https://qianshaobo-d3gjx8wkh621904d1.service.tcloud
 export const parseOcrHttpResponse = (statusCode: number, data: unknown): string => {
   const payload = data && typeof data === "object" ? (data as { text?: unknown; error?: unknown }) : null;
   if (statusCode === 200 && payload && typeof payload.text === "string") return payload.text;
-  if (statusCode === 429) throw new Error("识别请求过于频繁，请稍后再试。");
+  if (statusCode === 429) throw new Error(payload && typeof payload.error === "string" ? payload.error : "识别次数已达上限，请稍后再试；仍可手动填写成分。");
   const fallback = "识别服务暂时不可用，请稍后再试。";
   throw new Error(payload && typeof payload.error === "string" ? payload.error : fallback);
 };
@@ -25,11 +26,12 @@ export const recognizeIngredientImage = async (savedFilePath: string): Promise<s
   const fileSystem = Taro.getFileSystemManager();
   const imageBase64 = fileSystem.readFileSync(source, "base64") as unknown as string;
   if (!imageBase64) throw new Error("图片读取失败，请重新选择");
+  if (imageBase64.length > 4 * Math.ceil(5 * 1024 * 1024 / 3)) throw new Error("照片过大，请换一张更小的照片；参考照片已保留，仍可手动填写成分。");
   const response = await Taro.request({
     url: OCR_ENDPOINT,
     method: "POST",
     timeout: 20000,
-    header: { "Content-Type": "application/json" },
+    header: await processingHeaders(),
     data: { imageBase64 }
   });
   return parseOcrHttpResponse(response.statusCode, response.data);

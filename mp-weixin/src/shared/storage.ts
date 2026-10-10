@@ -6,6 +6,8 @@ import { matchIngredientText } from "@shared/data/ingredientMatcher";
 import { createProductDraftStore, type ProductDraft } from "./product-draft";
 import { createLocalRepository, createSyncCoordinator, productSignature, type Snapshot, type SyncTransport } from "./sync-model";
 import { createSyncActionRunner } from "./sync-actions";
+import { createReferencePhotoStore } from "./reference-photo";
+import { readReferencePaths } from "./reference-paths";
 
 const initial: Snapshot = { localProducts: [], selectedIds: [...defaultSelectedIds], skinConcerns: [] };
 const repo = createLocalRepository({
@@ -20,6 +22,20 @@ const transport: SyncTransport = {
   putProfile: async (owner, snapshot) => (await import("./cloud")).syncTransport.putProfile(owner, snapshot)
 };
 const coordinator = createSyncCoordinator(repo, transport, initial);
+export const getLocalScope = () => repo.scope();
+const photos = createReferencePhotoStore({ get: key => Taro.getStorageSync(key), set: (key,value) => Taro.setStorageSync(key,value) }, getLocalScope, {
+  fileInfo: async path => { const result=await Taro.getFileInfo({filePath:path}); if (!('size' in result)) throw new Error('照片大小暂不可读取，已停止保存'); return {size:result.size}; },
+  imageInfo: path => Taro.getImageInfo({ src: path }),
+  compress: async (path,width,height) => (await Taro.compressImage({ src:path,quality:80,compressedWidth:width,compressedHeight:height })).tempFilePath,
+  savedFiles: async () => (await Taro.getSavedFileList()).fileList,
+  save: async path => { const result=await Taro.saveFile({tempFilePath:path}); if (!('savedFilePath' in result) || !result.savedFilePath) throw new Error('照片保存未确认，填写内容保留'); return result.savedFilePath; },
+  remove: async path => {await Taro.removeSavedFile({filePath:path});}
+},()=>readReferencePaths({get:key=>Taro.getStorageSync(key),set:()=>{throw new Error('照片引用核对禁止写入');}},Taro.getStorageInfoSync().keys));
+export const prepareReferencePhoto = (path: string, draft: ProductDraft) => photos.prepare(path,draft);
+export const attachReferencePhoto = (draft: ProductDraft, path: string, previous: string) => photos.attach(draft,path,previous);
+export const getReferencePhotoInventory = () => photos.inventory();
+export const proposeReferencePhotoRemoval = (path:string) => photos.proposeRemoval(path);
+export const removeConfirmedReferencePhoto = (token:string) => photos.removeConfirmed(token);
 export const getLocalProducts = () => repo.read().desiredSnapshot.localProducts;
 export const getSelectedIds = () => repo.read().desiredSnapshot.selectedIds;
 export const getSkinConcerns = () => repo.read().desiredSnapshot.skinConcerns;

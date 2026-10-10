@@ -1,11 +1,12 @@
 import { Button, Image, Text, View } from "@tarojs/components";
 import { useDidShow } from "@tarojs/taro";
 import Taro from "@tarojs/taro";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SkinConcern } from "@shared/types";
 import { skinConcernOptions } from "../../shared/constants";
 import {
   getSkinConcerns,
+  getLocalScope,
   needsCloudPull,
   pullFromCloud,
   setSkinConcerns,
@@ -15,6 +16,8 @@ import {
 import "../../shared/page.css";
 import "./index.css";
 import heroCare from "../../assets/illustrations/hero-care.png";
+import HhidAccount from "../../components/HhidAccount";
+import ReferencePhotos from "../../components/ReferencePhotos";
 import conditionAcne from "../../assets/illustrations/condition-acne.png";
 import conditionDry from "../../assets/illustrations/condition-dry.png";
 import conditionSensitive from "../../assets/illustrations/condition-sensitive.png";
@@ -82,45 +85,54 @@ export default function ConditionsPage() {
   const [syncing, setSyncing] = useState(false);
   const [cloudHint, setCloudHint] = useState<string>("未登录，数据只存本机");
 
-  useDidShow(() => {
-    try {
-    setConcerns(getSkinConcerns());
-    setCloudHint(getSyncHint());
-    // 已登录过的账号静默拉一次云端，让换设备时看到同样的肤质
-    if (needsCloudPull()) {
-      void pullFromCloud().then((result) => {
-        if (result.ok) {
-          setConcerns(getSkinConcerns());
-          setCloudHint(result.message);
-        }
-        else setCloudHint(result.message);
-      });
-    }
-    } catch (error) { setCloudHint(error instanceof Error ? error.message : "本机读取异常，原稿保留"); }
-  });
-
-  const toggleConcern = (concern: SkinConcern) => {
-    const next = concerns.includes(concern)
-      ? concerns.filter((item) => item !== concern)
-      : [...concerns, concern];
-    try { setSkinConcerns(next); setConcerns(next); setCloudHint(getSyncHint()); }
-    catch { Taro.showToast({ title: "保存失败，原稿保留", icon: "none" }); }
+  const [ready,setReady] = useState(false);
+  const loadedScope=useRef<string | null>(null), viewEpoch=useRef(0), syncBusy=useRef(false), alive=useRef(true);
+  useEffect(()=>{alive.current=true;return()=>{alive.current=false;viewEpoch.current++;loadedScope.current=null;};},[]);
+  const loadCurrent = () => {
+    const scope=getLocalScope(), next=getSkinConcerns(), hint=getSyncHint();
+    if (getLocalScope()!==scope) throw new Error("账号已变化，请重新打开；原记录保留");
+    loadedScope.current=scope;setConcerns(next);setCloudHint(hint);setReady(true);
+    return scope;
   };
-
-  const runSync = async (mode: "save" | "read") => {
-    if (syncing) return;
-    setSyncing(true);
-    Taro.showToast({ title: mode === "save" ? "保存中…" : "读取中…", icon: "none" });
+  const hideUnknown = (error:unknown) => {
+    loadedScope.current=null;setReady(false);setConcerns([]);
+    setCloudHint(error instanceof Error ? error.message : "本机读取异常，原记录保留，请重试读取");
+  };
+  useDidShow(() => {
+    const epoch=++viewEpoch.current;
     try {
-      const result = await runUserSyncAction(mode);
-      setCloudHint(result.message);
-      if (result.ok) setConcerns(getSkinConcerns());
-      Taro.showToast({ title: result.message, icon: result.ok ? "success" : "none" });
-    } catch (error) {
-      setCloudHint(error instanceof Error ? error.message : "同步失败，本机原稿保留");
-    } finally {
-      setSyncing(false);
-    }
+      const scope=loadCurrent();
+      if (needsCloudPull()) void pullFromCloud().then(result=>{
+        if (!alive.current || epoch!==viewEpoch.current) return;
+        try {
+          if (getLocalScope()!==scope) return;
+          if (result.ok) loadCurrent();
+          setCloudHint(result.message);
+        } catch(error) { hideUnknown(error); }
+      }).catch(error=>{if(alive.current && epoch===viewEpoch.current) hideUnknown(error);});
+    } catch(error) { hideUnknown(error); }
+  });
+  const toggleConcern = (concern:SkinConcern) => {
+    if (!ready || syncBusy.current || !loadedScope.current) return;
+    try {
+      if (getLocalScope()!==loadedScope.current) throw new Error("账号已变化，旧选择未写入；请重新打开当前护肤记录");
+      // 以当前分区原始记录计算增量，不把旧页面数组覆盖到后来账号。
+      const original=getSkinConcerns();
+      const next=original.includes(concern)?original.filter(item=>item!==concern):[...original,concern];
+      setSkinConcerns(next);setConcerns(next);setCloudHint(getSyncHint());
+    } catch(error) { hideUnknown(error); }
+  };
+  const runSync = async (mode:"save" | "read") => {
+    if (syncBusy.current || (mode==='save' && !ready)) return;
+    syncBusy.current=true;setSyncing(true);const epoch=viewEpoch.current;
+    Taro.showToast({title:mode==='save'?"保存中…":"读取中…",icon:"none"});
+    try {
+      const result=await runUserSyncAction(mode);
+      if (!alive.current || epoch!==viewEpoch.current) return;
+      if (result.ok) loadCurrent();
+      setCloudHint(result.message);Taro.showToast({title:result.message,icon:result.ok?"success":"none"});
+    } catch(error) { if(alive.current && epoch===viewEpoch.current) hideUnknown(error); }
+    finally { syncBusy.current=false;if(alive.current)setSyncing(false); }
   };
 
   return (
@@ -139,16 +151,18 @@ export default function ConditionsPage() {
         <Text className="cloud-status">{cloudHint}</Text>
         <View className="cloud-actions">
           <View className="cloud-pair">
-            <Button className="cloud-action primary" onClick={() => runSync("save")} disabled={syncing}>保存</Button>
+            <Button className="cloud-action primary" onClick={() => runSync("save")} disabled={syncing || !ready}>保存</Button>
             <Button className="cloud-action" onClick={() => runSync("read")} disabled={syncing}>读取</Button>
           </View>
         </View>
         <Text className="cloud-note">
           保存到云端，读取到本机。需要时自动微信登录；失败不丢本机内容。
         </Text>
+        <HhidAccount />
+        <ReferencePhotos key={ready ? loadedScope.current : 'unavailable'} />
       </View>
       <View className="panel">
-        <View className="section-title"><Text>我的皮肤情况</Text><Text>{concerns.length} 项</Text></View>
+        <View className="section-title"><Text>我的皮肤情况</Text><Text>{ready ? concerns.length + " 项" : "暂未读取"}</Text></View>
         <View className="condition-grid">
           {skinConcernOptions.map((concern) => {
             const active = concerns.includes(concern);
@@ -156,7 +170,7 @@ export default function ConditionsPage() {
               <Button
                 className={active ? "condition-switch active" : "condition-switch"}
                 key={concern}
-                disabled={syncing}
+                disabled={syncing || !ready}
                 onClick={() => toggleConcern(concern)}
               >
                 <View className="condition-illustration">

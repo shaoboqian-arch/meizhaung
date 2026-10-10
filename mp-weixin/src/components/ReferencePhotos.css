@@ -1,0 +1,10 @@
+.reference-photos { margin-top: 20px; padding-top: 18px; border-top: 1px solid #eadfd4; }
+.reference-heading { display: flex; align-items: center; justify-content: space-between; }
+.reference-title { display: block; color: #322721; font-size: 30px; line-height: 1.5; }
+.reference-note { display: block; color: #776055; font-size: 26px; line-height: 1.6; }
+.reference-link { flex-shrink: 0; margin: 0; min-height: 96px; display: flex; align-items: center; justify-content: center; padding: 12px 14px; color: #776055; background: #fff8f0; border-radius: 12px; font-size: 28px; line-height: 1.5; }
+.reference-link::after { border: none; }
+.reference-photo { display: flex; align-items: center; margin-top: 14px; padding: 12px 0; border-bottom: 1px solid #eadfd4; }
+.reference-image { flex-shrink: 0; width: 84px; height: 84px; border-radius: 12px; }
+.reference-missing { display: flex; align-items: center; justify-content: center; background: #f4ece3; color: #776055; font-size: 22px; }
+.reference-copy { flex: 1; min-width: 0; padding: 0 14px; }

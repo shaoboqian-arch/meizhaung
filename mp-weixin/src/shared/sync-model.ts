@@ -84,7 +84,7 @@ export const createLocalRepository = (storage: LocalStoragePort, initial: Snapsh
     if (typeof raw !== "string" || !raw) throw new Error("本机账号标记损坏，已停止读写");
     return raw;
   };
-  const read = (owner = scope()): DraftState => {
+  const peek = (owner = scope()): DraftState | null => {
     const raw = storage.get(key(owner));
     if (!absent(raw)) {
       const s = raw as DraftState;
@@ -96,6 +96,11 @@ export const createLocalRepository = (storage: LocalStoragePort, initial: Snapsh
       }
       return clone(s);
     }
+    return null;
+  };
+  const read = (owner = scope()): DraftState => {
+    const existing=peek(owner);
+    if(existing) return existing;
     // Legacy keys are preserved verbatim. They belong to an unclaimed guest draft, never to an inferred account.
     const desired = clone(initial);
     let legacy = false;
@@ -128,7 +133,7 @@ export const createLocalRepository = (storage: LocalStoragePort, initial: Snapsh
     save(state);
     return next;
   };
-  return { read, save, scope, activate, change };
+  return { read, peek, save, scope, activate, change };
 };
 
 export const createSyncCoordinator = (repo: ReturnType<typeof createLocalRepository>, transport: SyncTransport,

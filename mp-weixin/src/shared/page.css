@@ -14,7 +14,7 @@
 .eyebrow {
   display: block;
   margin-bottom: 6px;
-  color: #9a7a6d;
+  color: #776055;
   font-size: 24px;
 }
 
@@ -29,7 +29,7 @@
   border: 1px solid rgba(105, 72, 58, 0.12);
   border-radius: 14px;
   background: #fffdf9;
-  color: #9a7a6d;
+  color: #776055;
   font-size: 24px;
   box-shadow: 0 8px 18px rgba(116, 74, 52, 0.08);
 }
@@ -57,12 +57,12 @@
 }
 
 .section-title text + text {
-  color: #9a7a6d;
+  color: #776055;
   font-size: 24px;
 }
 
 .muted {
-  color: #8b7469;
+  color: #776055;
   font-size: 24px;
   line-height: 1.55;
 }
@@ -143,7 +143,7 @@
 
 .card-meta {
   flex-shrink: 0;
-  color: #9a7a6d;
+  color: #776055;
   font-size: 23px;
 }
 
@@ -160,7 +160,7 @@
   border: 1px solid rgba(105, 72, 58, 0.12);
   border-radius: 12px;
   background: rgba(255, 244, 235, 0.9);
-  color: #8b7469;
+  color: #776055;
   font-size: 22px;
 }
 
@@ -198,7 +198,7 @@
   border: 1px solid rgba(105, 72, 58, 0.12);
   border-radius: 999px;
   background: #fffdf9;
-  color: #8b7469;
+  color: #776055;
   font-size: 23px;
   line-height: 58px;
 }
@@ -247,7 +247,7 @@
   padding: 13px 15px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.64);
-  color: #8b7469;
+  color: #776055;
   font-size: 23px;
   line-height: 1.5;
 }
@@ -299,7 +299,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #8b7469;
+  color: #776055;
   font-size: 22px;
 }
 
@@ -330,7 +330,7 @@
   border: 1px solid rgba(105, 72, 58, 0.12);
   border-radius: 14px;
   background: #fffdf9;
-  color: #8b7469;
+  color: #776055;
   font-size: 24px;
 }
 
