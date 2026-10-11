@@ -41,6 +41,22 @@ async function authorizeProductReview({ platformToken, processingToken, publisha
 async function reviewProductRows({ identity, rows, secret, fetchImpl = fetch, now = Date.now(), clock = Date.now }) {
   if (!identity || identity.ruleVersion !== RULE || identity.applicationId !== APPLICATION_ID ||
       !OPENID_PATTERN.test(identity.openid || '') || identity.owner !== 'wx:' + identity.openid || identity.expiresAt <= now) reject('REVIEW_IDENTITY_REQUIRED', 401);
+  const frozen = freezeProductRows(rows);
+  // Validate the whole batch first; rejected later rows must not spend earlier review calls.
+  for (const row of frozen) {
+    const content = rowContent(row);
+    let decision;
+    try { decision = classifySecCheck(await msgSecCheck({ content, openid: identity.openid, secret, fetchImpl, now })); }
+    catch { reject('CONTENT_REVIEW_UNAVAILABLE', 503); }
+    if (decision.verdict !== 'pass') reject(decision.verdict === 'risky' ? 'CONTENT_REJECTED' : 'CONTENT_REVIEW_PENDING', decision.verdict === 'risky' ? 400 : 503);
+    if (identity.expiresAt <= clock()) reject('WECHAT_SESSION_REQUIRED', 401);
+  }
+  return Object.freeze({ ruleVersion: RULE, owner: identity.owner, rows: frozen });
+}
+
+// A receipt issuer also freezes caller input before remote identity validation.
+// Keep field projection and validation in this one implementation.
+function freezeProductRows(rows) {
   if (!Array.isArray(rows) || rows.length > 50) reject('PRODUCT_PAYLOAD_INVALID', 400);
   const ids = new Set();
   const frozen = rows.map(row => {
@@ -55,17 +71,7 @@ async function reviewProductRows({ identity, rows, secret, fetchImpl = fetch, no
     if (Buffer.byteLength(JSON.stringify(fixed), 'utf8') > 32768 || rowContent(fixed).length > 8000) reject('PRODUCT_PAYLOAD_TOO_LARGE', 400);
     return Object.freeze(fixed);
   });
-  Object.freeze(frozen);
-  // Validate the whole batch first; rejected later rows must not spend earlier review calls.
-  for (const row of frozen) {
-    const content = rowContent(row);
-    let decision;
-    try { decision = classifySecCheck(await msgSecCheck({ content, openid: identity.openid, secret, fetchImpl, now })); }
-    catch { reject('CONTENT_REVIEW_UNAVAILABLE', 503); }
-    if (decision.verdict !== 'pass') reject(decision.verdict === 'risky' ? 'CONTENT_REJECTED' : 'CONTENT_REVIEW_PENDING', decision.verdict === 'risky' ? 400 : 503);
-    if (identity.expiresAt <= clock()) reject('WECHAT_SESSION_REQUIRED', 401);
-  }
-  return Object.freeze({ ruleVersion: RULE, owner: identity.owner, rows: frozen });
+  return Object.freeze(frozen);
 }
 
 // Include all stored strings; forged category/reference ids must not become an unreviewed text channel.
@@ -73,4 +79,4 @@ function rowContent(row) {
   return [row.product_id, row.brand, row.model, row.category, ...row.ingredient_ids, row.notes || ''].join('\n');
 }
 
-module.exports = { RULE, APPLICATION_ID, USER_URL, ProductReviewError, authorizeProductReview, reviewProductRows };
+module.exports = { RULE, APPLICATION_ID, USER_URL, ProductReviewError, authorizeProductReview, reviewProductRows, freezeProductRows };
