@@ -49,13 +49,31 @@ export async function ensureWxOpenid(): Promise<string> { return (await ensurePr
 export async function processingHeaders(): Promise<Record<string, string>> {
   return { "Content-Type": "application/json", Authorization: "Bearer " + (await ensureProcessingSession()).processingToken };
 }
+// A rejected request invalidates only the credential it used. A newer concurrent
+// login must survive the older 401; renewal waits for the next explicit action.
+export function invalidateRejectedProcessingSession(authorization: string): void {
+  const cached = Taro.getStorageSync(PROCESSING_SESSION_KEY);
+  if (!validProcessingSession(cached) || authorization !== "Bearer " + cached.processingToken) return;
+  Taro.removeStorageSync(PROCESSING_SESSION_KEY);
+  const remaining = Taro.getStorageSync(PROCESSING_SESSION_KEY);
+  if (validProcessingSession(remaining) && authorization === "Bearer " + remaining.processingToken) {
+    throw new Error("身份凭证重置失败，草稿与照片已保留，请稍后重试。");
+  }
+}
 export async function checkContentBeforeSave(texts: Array<string | null | undefined>): Promise<void> {
   const content = texts.map(item => String(item ?? "").trim()).filter(Boolean).join("\n");
   if (!content) return;
   if (content.length > 8000) throw new ContentBlockedError("内容过长，请精简后重试；草稿已保留。");
-  let response;
-  try { response = await Taro.request({ url: SEC_CHECK_ENDPOINT, method: "POST", timeout: 10000, header: await processingHeaders(), data: { content } }); }
+  let response, header;
+  try {
+    header = await processingHeaders();
+    response = await Taro.request({ url: SEC_CHECK_ENDPOINT, method: "POST", timeout: 10000, header, data: { content } });
+  }
   catch { throw new ContentPendingError(pendingMessage); }
+  if (response.statusCode === 401) {
+    invalidateRejectedProcessingSession(header.Authorization);
+    throw new ContentPendingError("微信身份已失效，请重试；草稿与照片已保留。");
+  }
   const message = parseSecCheckResponse(response.statusCode, response.data);
   if (message) throw response.statusCode === 400 ? new ContentBlockedError(message) : new ContentPendingError(message);
 }

@@ -17,10 +17,20 @@ function fixture() {
   return { writes, reviews, setOwner: (value: string) => { owner = value; }, setReply: (value: any) => { reply = value; }, close: () => { sdk.database.from = from; sdk.auth.getSession = session; Taro.request = request; } };
 }
 
-test("同步产品把品牌、型号和备注一起校验，通过后才写固定内容", async () => {
+test("同步产品全部持久化文本一起校验，通过后才写固定内容", async () => {
   const f = fixture();
-  try { const result = await syncTransport.putProducts("synthetic-owner", [product()]); assert.equal(result.ok, true); assert.equal(f.reviews.length, 1); assert.match(f.reviews[0].data.content, /待校验备注/); assert.equal(f.writes.length, 1); assert.equal(f.writes[0].rows[0].notes, "待校验备注"); }
+  try { const result = await syncTransport.putProducts("synthetic-owner", [product()]); assert.equal(result.ok, true); assert.equal(f.reviews.length, 1); assert.equal(f.reviews[0].data.content, 'manual-1\n合成品牌\n合成型号\n洁面\nsynthetic-ingredient\n待校验备注'); assert.equal(f.writes.length, 1); assert.equal(f.writes[0].rows[0].notes, "待校验备注"); }
   finally { f.close(); }
+});
+
+test('导入成分引用中的未审核文本不能绕过预检，超长引用零请求零写入',async()=>{
+ const f=fixture(),p=product();p.ingredientIds=['未审核引用'];
+ try {
+  f.setReply({statusCode:400,data:{error:'内容违规'}});
+  assert.equal((await syncTransport.putProducts('synthetic-owner',[p])).ok,false);assert.match(f.reviews[0].data.content,/未审核引用/);assert.equal(f.writes.length,0);
+  p.ingredientIds=['甲'.repeat(8001)];
+  assert.equal((await syncTransport.putProducts('synthetic-owner',[p])).ok,false);assert.equal(f.reviews.length,1);assert.equal(f.writes.length,0);
+ }finally{f.close();}
 });
 
 test("审核待处理、旧故障放行、违规和网络故障均零云写入", async () => {

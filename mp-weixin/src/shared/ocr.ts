@@ -1,5 +1,5 @@
 import Taro from "@tarojs/taro";
-import { processingHeaders } from "./wxsession";
+import { processingHeaders, invalidateRejectedProcessingSession } from "./wxsession";
 
 // 拍照识别成分：照片压缩后经同步云函数 /ocr 转发至腾讯云通用印刷体识别。
 // 契约：POST { imageBase64 } → 200 { ok, text, itemCount } | 4xx/5xx { error }。
@@ -27,12 +27,17 @@ export const recognizeIngredientImage = async (savedFilePath: string): Promise<s
   const imageBase64 = fileSystem.readFileSync(source, "base64") as unknown as string;
   if (!imageBase64) throw new Error("图片读取失败，请重新选择");
   if (imageBase64.length > 4 * Math.ceil(5 * 1024 * 1024 / 3)) throw new Error("照片过大，请换一张更小的照片；参考照片已保留，仍可手动填写成分。");
+  const header = await processingHeaders();
   const response = await Taro.request({
     url: OCR_ENDPOINT,
     method: "POST",
     timeout: 20000,
-    header: await processingHeaders(),
+    header,
     data: { imageBase64 }
   });
+  if (response.statusCode === 401) {
+    invalidateRejectedProcessingSession(header.Authorization);
+    throw new Error("微信身份已失效，请重试；草稿与照片已保留。");
+  }
   return parseOcrHttpResponse(response.statusCode, response.data);
 };

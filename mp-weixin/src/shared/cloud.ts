@@ -121,7 +121,9 @@ export const syncTransport: SyncTransport = {
       if (!access.ok) return access;
       // Per-product requests keep a large import from exceeding the review API's
       // per-request text limit. Commit the batch only after every product passes.
-      for (const row of rows) await checkContentBeforeSave([row.brand, row.model, row.notes]);
+      for (const row of rows) await checkContentBeforeSave([
+        row.product_id, row.brand, row.model, row.category, ...row.ingredient_ids, row.notes
+      ]);
       const rechecked = await guard(owner);
       if (!rechecked.ok) return rechecked;
       // Only operation deltas, never a full product-table replacement; no owner_id or device image path.

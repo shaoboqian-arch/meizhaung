@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import Taro from "@tarojs/taro";
-import { checkContentBeforeSave, parseSecCheckResponse, parseSessionResponse, ensureProcessingSession, PROCESSING_SESSION_KEY } from "../src/shared/wxsession";
+import { checkContentBeforeSave, parseSecCheckResponse, parseSessionResponse, ensureProcessingSession, invalidateRejectedProcessingSession, PROCESSING_SESSION_KEY, SESSION_ENDPOINT } from "../src/shared/wxsession";
 const session = () => ({ openid: 'o' + 'x'.repeat(27), processingToken: 'wxc_synthetic.' + 'a'.repeat(64), expiresAt: Date.now() + 60_000 });
 test('微信身份解析必须有完整 openid，错误和损坏回执拒绝', () => {
  assert.equal(parseSessionResponse(200,{openid:'o'.repeat(28)}),'o'.repeat(28));
@@ -61,4 +61,38 @@ test('旧服务只返回 openid 时拒绝；存储写入失败也不假装获得
   Taro.setStorageSync=(()=>{throw new Error('write failed');}) as never;
   await assert.rejects(ensureProcessingSession(),/write failed/);
  } finally {Taro.request=request;Taro.setStorageSync=set;}
+});
+
+test('401 只停止本次预检，下次明确操作才重新获取身份；原稿缓存不动', async () => {
+ const request=Taro.request, login=Taro.login; const old=session(), next={...session(),processingToken:'wxc_renewed.'+'b'.repeat(64)};
+ Taro.setStorageSync(PROCESSING_SESSION_KEY,old);Taro.setStorageSync('synthetic-draft',{notes:'保留原稿'});
+ let calls=0, logins=0;
+ Taro.login=(async()=>{logins++;return {code:'fresh-synthetic-code'};}) as never;
+ Taro.request=(async(options:any)=>{calls++;return options.url===SESSION_ENDPOINT?{statusCode:200,data:next}:{statusCode:401,data:{error:'rejected'}};}) as never;
+ try {
+  await assert.rejects(checkContentBeforeSave(['合成产品']),/身份已失效.*保留/);
+  assert.equal(calls,1);assert.equal(logins,0);assert.equal(Taro.getStorageSync(PROCESSING_SESSION_KEY),'');
+  assert.deepEqual(Taro.getStorageSync('synthetic-draft'),{notes:'保留原稿'});
+  assert.equal((await ensureProcessingSession()).processingToken,next.processingToken);assert.equal(calls,2);assert.equal(logins,1);
+ } finally {Taro.request=request;Taro.login=login;}
+});
+
+test('较早请求返回401时不清除期间新登录的凭证', async () => {
+ const request=Taro.request, old=session(), next={...session(),processingToken:'wxc_newowner.'+'b'.repeat(64)};
+ Taro.setStorageSync(PROCESSING_SESSION_KEY,old);let calls=0;
+ Taro.request=(async()=>{calls++;Taro.setStorageSync(PROCESSING_SESSION_KEY,next);return {statusCode:401,data:{}};}) as never;
+ try {await assert.rejects(checkContentBeforeSave(['合成产品']),/身份已失效/);assert.equal(calls,1);assert.deepEqual(Taro.getStorageSync(PROCESSING_SESSION_KEY),next);}
+ finally {Taro.request=request;}
+});
+
+test('凭证缓存读取失败不执行删除，删除未生效也不假报重置成功', () => {
+ const get=Taro.getStorageSync, remove=Taro.removeStorageSync, old=session();let deletes=0;
+ Taro.setStorageSync(PROCESSING_SESSION_KEY,old);
+ try {
+  Taro.removeStorageSync=(()=>{deletes++;}) as never;
+  Taro.getStorageSync=(()=>{throw Error('storage read failed');}) as never;
+  assert.throws(()=>invalidateRejectedProcessingSession('Bearer '+old.processingToken),/storage read failed/);assert.equal(deletes,0);
+  Taro.getStorageSync=get;
+  assert.throws(()=>invalidateRejectedProcessingSession('Bearer '+old.processingToken),/重置失败.*保留/);assert.equal(deletes,1);
+ } finally {Taro.getStorageSync=get;Taro.removeStorageSync=remove;}
 });

@@ -71,3 +71,18 @@ test('oversized local image never requests a processing identity or paid OCR',as
  Object.assign(Taro,{compressImage:async()=>({tempFilePath:'compressed'}),getFileSystemManager:()=>({readFileSync:()=> 'a'.repeat(7000000)}),request:async()=>{calls++;throw new Error('must not request');}});
  try{await assert.rejects(recognizeIngredientImage('original'),/照片过大.*保留/);assert.equal(calls,0);}finally{Object.assign(Taro,originals);}
 });
+
+test('OCR401清除被拒凭证且不自动重试，迟到401保留新凭证，限流保留有效身份',async()=>{
+ const originals={compressImage:Taro.compressImage,getFileSystemManager:Taro.getFileSystemManager,request:Taro.request};
+ const old={openid:'o'.repeat(28),processingToken:'wxc_old.'+'a'.repeat(64),expiresAt:Date.now()+60000};
+ const next={...old,processingToken:'wxc_new.'+'b'.repeat(64)};
+ Object.assign(Taro,{compressImage:async()=>({tempFilePath:'compressed'}),getFileSystemManager:()=>({readFileSync:()=> 'synthetic-base64'})});
+ try {
+  for(const mode of ['rejected','late','limited']) {
+   Taro.setStorageSync(PROCESSING_SESSION_KEY,old);let calls=0;
+   Taro.request=(async()=>{calls++;if(mode==='late')Taro.setStorageSync(PROCESSING_SESSION_KEY,next);return {statusCode:mode==='limited'?429:401,data:{error:'今天识别额度已用完'}};}) as never;
+   await assert.rejects(recognizeIngredientImage('original'),mode==='limited'?/额度已用完/:/身份已失效.*照片已保留/);
+   assert.equal(calls,1);assert.deepEqual(Taro.getStorageSync(PROCESSING_SESSION_KEY),mode==='rejected'?'':mode==='late'?next:old);
+  }
+ } finally {Object.assign(Taro,originals);}
+});
