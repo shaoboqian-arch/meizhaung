@@ -276,8 +276,13 @@ test("两个按钮：确认期间连续点击只启动一条流程", async () =>
 });
 test("真实storage两按钮闭环：读取零云写，保存回读后完成，游客原稿仍在", async () => {
   const { cloud } = await import("../src/shared/cloud");
+  const { PROCESSING_SESSION_KEY } = await import("../src/shared/wxsession");
   const fixtureCloud = cloud as any;
   const originalFrom = fixtureCloud.database.from;
+  const originalRequest = Taro.request;
+  let approved = false, reviews = 0;
+  Taro.setStorageSync(PROCESSING_SESSION_KEY, { openid: "o".repeat(28), processingToken: "wxc_synthetic." + "a".repeat(64), expiresAt: Date.now() + 60_000 });
+  Taro.request = (async () => { reviews++; return { statusCode: 200, data: approved ? { ok: true } : { ok: true, pending: true } }; }) as never;
   const rows: any[] = [];
   let profile: any = null; let writes = 0;
   fixtureCloud.database.from = (table: string) => ({
@@ -298,9 +303,11 @@ test("真实storage两按钮闭环：读取零云写，保存回读后完成，�
     const original = JSON.stringify(Taro.getStorageSync("beauty-mp-state-v1:guest"));
     assert.equal((await runUserSyncAction("read")).ok, true); assert.equal(writes, 0);
     assert.ok(guestProducts.every((p) => getLocalProducts().some((account) => account.id === p.id)));
+    assert.equal((await runUserSyncAction("save")).ok, false); assert.equal(writes, 0); assert.ok(reviews > 0);
+    approved = true;
     assert.equal((await runUserSyncAction("save")).ok, true); assert.ok(writes > 0);
     const state = Taro.getStorageSync("beauty-mp-state-v1:synthetic-owner");
     assert.equal(state.journalId, null);
     assert.equal(JSON.stringify(Taro.getStorageSync("beauty-mp-state-v1:guest")), original);
-  } finally { fixtureCloud.database.from = originalFrom; useGuestDraft(); }
+  } finally { fixtureCloud.database.from = originalFrom; Taro.request = originalRequest; useGuestDraft(); }
 });

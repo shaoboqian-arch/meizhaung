@@ -34,15 +34,16 @@ test('缓存处理凭证发 Authorization，不相信前端自行填写 openid',
 test('坏缓存自愈：非法格式凭证清除后重新登录成功，不再永久卡读取异常', async () => {
   const request=Taro.request;const get=Taro.getStorageSync;const set=Taro.setStorageSync;const remove=Taro.removeStorageSync;
   const store=new Map<string, unknown>();
+  const issued=session();
   Taro.getStorageSync=((k: string)=>store.get(k)??'') as never;
   Taro.setStorageSync=((k: string,v: unknown)=>{store.set(k,v)}) as never;
   Taro.removeStorageSync=((k: string)=>{store.delete(k)}) as never;
-  Taro.request=(async()=>({statusCode:200,data:session()})) as never;
+  Taro.request=(async()=>({statusCode:200,data:issued})) as never;
   try {
     store.set(PROCESSING_SESSION_KEY,{broken:'legacy-format'});
     const result=await ensureProcessingSession();
     assert.match(result.processingToken,/^wxc_/);
-    assert.deepEqual(store.get(PROCESSING_SESSION_KEY),session());
+    assert.deepEqual(store.get(PROCESSING_SESSION_KEY),issued);
   } finally {Taro.request=request;Taro.getStorageSync=get;Taro.setStorageSync=set;Taro.removeStorageSync=remove;}
 });
 test('处理凭证读取失败不得触发登录或覆盖未知缓存', async () => {

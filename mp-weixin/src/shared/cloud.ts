@@ -3,6 +3,7 @@ import { createMiniProgramWorkBuddyCloud } from "@tencent-ai/workbuddy-cloud-sdk
 import { createDiagnosticWx } from "./workbuddy-cloud-diagnostics";
 import { defaultSelectedIds } from "./constants";
 import { validSnapshot, type Outcome, type Snapshot, type SyncTransport } from "./sync-model";
+import { checkContentBeforeSave, ContentBlockedError, ContentPendingError } from "./wxsession";
 import type { Product } from "@shared/types";
 
 /** The existing public application key is not an edit credential. */
@@ -34,6 +35,10 @@ const messages: Record<string, string> = {
   network: "网络不通，本机改动及待同步记录保留"
 };
 const failure = (error: unknown, status?: number): Outcome<never> => {
+  if (error instanceof ContentBlockedError || error instanceof ContentPendingError) return {
+    ok: false, kind: error instanceof ContentBlockedError ? "content-blocked" : "content-pending",
+    message: error.message || "内容校验尚未完成，本机原稿保留，请稍后重试"
+  };
   const e = error && typeof error === "object" ? error as Record<string, unknown> : {};
   // Auth returns CloudError.kind; PostgREST returns code plus response.status.
   // Never infer a missing record from a timeout or match localized message text.
@@ -104,14 +109,24 @@ export const syncTransport: SyncTransport = {
   },
   async putProducts(owner, products) {
     if (!products.length) return ok(null);
-    const access = await guard(owner);
-    if (!access.ok) return access;
     try {
-      // Only operation deltas, never a full product-table replacement; no owner_id or device image path.
-      const { error, status } = await cloud.database.from("user_products").upsert(products.map((p) => ({
+      if (!validSnapshot({ localProducts: products, selectedIds: [], skinConcerns: [] })) return failure({ kind: "invalid-request" });
+      // Freeze the exact outgoing fields before any asynchronous checks. Imports and sync
+      // share this gate; page-level checks alone cannot cover every cloud write.
+      const rows = products.map((p) => ({
         product_id: p.id, brand: p.brand, model: p.model, category: p.category,
-        ingredient_ids: p.ingredientIds, notes: p.notes ?? null
-      })), { onConflict: "owner_id,product_id" });
+        ingredient_ids: [...p.ingredientIds], notes: p.notes ?? null
+      }));
+      const access = await guard(owner);
+      if (!access.ok) return access;
+      // Per-product requests keep a large import from exceeding the review API's
+      // per-request text limit. Commit the batch only after every product passes.
+      for (const row of rows) await checkContentBeforeSave([row.brand, row.model, row.notes]);
+      const rechecked = await guard(owner);
+      if (!rechecked.ok) return rechecked;
+      // Only operation deltas, never a full product-table replacement; no owner_id or device image path.
+      // This client gate does not replace the outstanding server/DB review binding.
+      const { error, status } = await cloud.database.from("user_products").upsert(rows, { onConflict: "owner_id,product_id" });
       return error ? failure(error, status) : ok(null);
     } catch (error) { return failure(error); }
   },
