@@ -17,7 +17,10 @@ export default defineAppConfig({
    */
   window: {
     backgroundTextStyle: "light",
-    navigationBarBackgroundColor: "#ffffff",
+    navigationBarBackgroundColor: "#fbf6ef",
+    backgroundColor: "#fbf6ef",
+    backgroundColorTop: "#fbf6ef",
+    backgroundColorBottom: "#fbf6ef",
     navigationBarTitleText: "成分搭配助手",
     navigationBarTextStyle: "black"
   },

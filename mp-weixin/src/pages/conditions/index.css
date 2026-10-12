@@ -12,7 +12,7 @@
   overflow: hidden;
   position: relative;
   box-shadow: 0 18px 38px rgba(147, 93, 54, 0.14);
-  animation: bFadeUp 0.48s ease both;
+  animation: bFadeUp 0.2s ease;
 }
 
 .skin-hero::before {
@@ -95,7 +95,7 @@
   text-align: center;
   position: relative;
   box-shadow: 0 4px 14px rgba(116, 74, 52, 0.06);
-  transition: all 0.22s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 /* WXSS conversion removes grid gap; preserve row spacing explicitly. */
@@ -125,7 +125,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  transition: all 0.22s ease;
+  transition: transform 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
   box-shadow: 0 8px 20px rgba(116, 74, 52, 0.08);
 }
 
@@ -208,7 +208,7 @@
   font-size: 22px;
   font-weight: 600;
   line-height: 1.3;
-  transition: all 0.22s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .cloud-action.primary {
