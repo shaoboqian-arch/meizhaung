@@ -83,6 +83,7 @@ const concernDescriptions: Record<SkinConcern, string> = {
 export default function ConditionsPage() {
   const [concerns, setConcerns] = useState<SkinConcern[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [syncOpen,setSyncOpen]=useState(false),[photosOpen,setPhotosOpen]=useState(false);
   const [cloudHint, setCloudHint] = useState<string>("未登录，数据只存本机");
 
   const [ready,setReady] = useState(false);
@@ -145,9 +146,12 @@ export default function ConditionsPage() {
         <Image className="hero-art-image" src={heroCare} mode="aspectFit" />
       </View>
       <View className="panel account-panel">
-        <View className="section-title">
-          <Text>账号与同步</Text>
-        </View>
+        <HhidAccount />
+        {!ready && <Text className="hhid-notice hhid-error">{cloudHint}</Text>}
+      </View>
+      <View className="panel account-settings">
+        <Button className="account-setting-row" disabled={syncing} onClick={()=>{setSyncOpen(!syncOpen);setPhotosOpen(false);}}><Text>云端记录</Text><Text className="account-row-arrow">{syncOpen?'−':'›'}</Text></Button>
+        {syncOpen && <View className="account-setting-body">
         <Text className="cloud-status">{cloudHint}</Text>
         <View className="cloud-actions">
           <View className="cloud-pair">
@@ -158,8 +162,9 @@ export default function ConditionsPage() {
         <Text className="cloud-note">
           保存到云端，读取到本机。需要时自动微信登录；失败不丢本机内容。
         </Text>
-        <HhidAccount />
-        <ReferencePhotos key={ready ? loadedScope.current : 'unavailable'} />
+        </View>}
+        <Button className="account-setting-row" disabled={syncing} onClick={()=>{setPhotosOpen(!photosOpen);setSyncOpen(false);}}><Text>参考照片</Text><Text className="account-row-arrow">{photosOpen?'−':'›'}</Text></Button>
+        {photosOpen && <View className="account-setting-body"><ReferencePhotos key={ready ? loadedScope.current : 'unavailable'} /></View>}
       </View>
       <View className="panel">
         <View className="section-title"><Text>我的皮肤情况</Text><Text>{ready ? concerns.length + " 项" : "暂未读取"}</Text></View>

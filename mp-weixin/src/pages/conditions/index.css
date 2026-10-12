@@ -257,3 +257,12 @@
   font-size: 19px;
   line-height: 1.45;
 }
+.account-panel { box-shadow:none; border-radius:20px; }
+.account-settings { padding:0 26px; box-shadow:none; border-radius:20px; }
+.account-setting-row { width:100%; min-height:100px; margin:0; padding:20px 0; display:flex; align-items:center; justify-content:space-between; background:transparent; border:0; border-radius:0; font-size:27px; font-weight:500; color:#513528; text-align:left; line-height:1.4; }
+.account-setting-row::after { border:0; }
+.account-setting-row + .account-setting-row { border-top:1px solid #e8ddd2; }
+.account-row-arrow { color:#765f52; font-size:30px; margin-left:20px; }
+.account-setting-body { padding:0 0 24px; }
+.account-setting-body .reference-photos { margin-top:0; padding-top:0; border-top:0; }
+.account-setting-body .cloud-note { color:#765f52; }

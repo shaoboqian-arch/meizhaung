@@ -7,6 +7,7 @@ const esbuild = require("esbuild");
 const { chromium } = require("playwright");
 const root = path.resolve(__dirname, "../..");
 const out = fs.mkdtempSync(path.join(os.tmpdir(), "beauty-mp-interactions-"));
+const accountOnly = process.argv.includes('--account-only');
 const miniOutput = process.env.BEAUTY_MP_OUTPUT_DIR;
 if (!miniOutput) throw new Error("Set BEAUTY_MP_OUTPUT_DIR to the verified fresh mini-program output; source CSS is not acceptance evidence");
 const postcss = require("postcss");
@@ -68,7 +69,7 @@ const previewCss = (width) => {
   const results = [];
   try {
     browser = await chromium.launch({ channel: "chrome", headless: true });
-    for (const width of [390, 1280]) {
+    for (const width of accountOnly ? [360,390,430] : [390, 1280]) {
       const page = await browser.newPage({ viewport: { width, height: 844 } });
       const errors = []; const externalRequests = [];
       page.on("pageerror", (error) => errors.push(error.message));
@@ -173,17 +174,23 @@ const previewCss = (width) => {
       assert.equal(overflow, false);
       await page.screenshot({ path: path.join(out, `analysis-${width}.png`), fullPage: true, animations: "disabled" });
       await page.getByRole("button", { name: "我的", exact: true }).click();
-      await page.getByText("账号与同步", { exact: true }).waitFor();
+      await page.getByText("HHID 共用账号", { exact: true }).waitFor();
+      assert.equal(await page.locator('.hhid-form').count(),0);
+      assert.equal(await page.locator('.cloud-action').count(),0);
+      assert.equal(await page.locator('.reference-photos').count(),0);
+      assert.equal(await page.locator('.account-settings > .account-setting-row').count(),2);
+      await page.screenshot({ path: path.join(out, `account-collapsed-${width}.png`), fullPage: true, animations: "disabled" });
+      await page.getByRole('button',{name:'云端记录',exact:false}).click();
       await page.getByRole("button", { name: "保存", exact: true }).waitFor();
       await page.getByRole("button", { name: "读取", exact: true }).waitFor();
-      assert.deepEqual(await page.locator(".account-panel button").allTextContents(), ["保存", "读取"]);
+      assert.deepEqual(await page.locator(".cloud-pair button").allTextContents(), ["保存", "读取"]);
       await page.screenshot({ path: path.join(out, `account-initial-${width}.png`), fullPage: true, animations: "disabled" });
       const originalConcerns = await page.locator(".condition-switch.active .condition-name").allTextContents();
       // The SDK mock refuses actual database traffic: exercise failure retention on both real UI actions.
       for (const action of ["保存", "读取"]) {
         await page.getByRole("button", { name: action, exact: true }).click();
         await page.getByRole("button", { name: action, exact: true }).waitFor({ state: "visible" });
-        await page.waitForFunction(() => [...document.querySelectorAll(".account-panel button")].every((button) => !button.disabled));
+        await page.waitForFunction(() => [...document.querySelectorAll(".cloud-pair button")].every((button) => !button.disabled));
         assert.deepEqual(await page.locator(".condition-switch.active .condition-name").allTextContents(), originalConcerns);
         assert.match(await page.locator(".cloud-status").textContent(), /失败|保留|不可用/);
       }
@@ -225,6 +232,22 @@ const previewCss = (width) => {
         card.noReservedDescriptionRow && card.imageFillsFrame && card.bottomPaddingPx <= 9),
         `Image-first card layout failed: ${JSON.stringify(conditionImageLayout)}`);
       await page.screenshot({ path: path.join(out, `account-${width}.png`), fullPage: true, animations: "disabled" });
+      if(accountOnly) {
+        await page.getByRole('button',{name:'云端记录',exact:false}).click();
+        assert.equal(await page.locator('.cloud-action').count(),0);
+        await page.getByRole('button',{name:'登录 / 注册',exact:true}).click();
+        assert.equal(await page.locator('.hhid-form').count(),1);
+        await page.screenshot({path:path.join(out,`account-login-${width}.png`),fullPage:true,animations:'disabled'});
+        await page.getByRole('button',{name:'收起',exact:true}).click();
+        await page.getByRole('button',{name:'参考照片',exact:false}).click();
+        assert.equal(await page.locator('.reference-photos').count(),1);
+        assert.equal(await page.locator('.cloud-action').count(),0);
+        assert.equal(await page.locator('.hhid-form').count(),0);
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth),false);
+        assert.deepEqual(errors,[]);assert.deepEqual(externalRequests,[]);
+        results.push({width,scope:'account-only',collapsed:true,loginReachable:true,syncFailureRetainsConcerns:true,photoEntryReachable:true,overflow:false,externalRequests:0});
+        await page.close();continue;
+      }
       await page.getByRole("button", { name: "产品", exact: true }).click();
       await page.locator(".product-card").first().waitFor();
       assert.equal(await page.locator(".product-card").count(), 24);
