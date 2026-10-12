@@ -32,9 +32,10 @@
 4. 通过 `tcb` 部署 `meizhaung-sync`。合并保留全部现有环境变量（含 OCR 额度、微信、OCR 凭证），
    加 `BEAUTY_PRODUCT_RECEIPT_SECRET`、`BEAUTY_WORKBUDDY_PUBLISHABLE_KEY`、`MEIZHAUNG_SOURCE_SHA`。
    SCF 环境变量更新为全量语义，禁止只提交新增键。
-5. 完成真实网关身份、签名 RPC、版本冲突和回读验收后，执行 cutover 收回普通角色的
+5. 后台和 RPC 就绪后，将封存候选交到现用发布目录，由用户更新体验版。
+   完成真实网关身份、签名 RPC、版本冲突和回读验收后，执行 cutover 收回普通角色的
    表级及列级直写权限。保留本人 RLS 读权限、RPC 执行权限和全部原数据。
-6. 用户更新小程序体验版；真实微信端同步验收后再将 M01 标记完成。
+6. cutover 后再次核对真实微信端同步与旁路拒绝，再将 M01 标记完成。
 
 旧体验版在 cutover 后直接表写会被拒绝，客户端原稿保留；需要协调体验版更新窗口。
 本方案不读写或迁移 `meizhaung_user_combinations` 的 18 条 Web 最终组合，不变更 HHID、抠图服务。
