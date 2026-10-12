@@ -1,4 +1,4 @@
-// Candidate only. No HTTP route or database writer imports this module.
+// Candidate route issues receipts; the PostgreSQL RPC is the independent consumer.
 // Signature verification alone is NOT replay protection or write authorization.
 const crypto = require('crypto');
 const { OPENID_PATTERN } = require('./wxsec');
@@ -9,6 +9,7 @@ const DATABASE = 'postgres-lgjvhh7s';
 const ACTION = 'owned.products.upsert';
 const TTL_MS = 120000;
 const MAX_BYTES = 256 * 1024;
+const REVIEW_DEADLINE_MS = 45000;
 const PREFIX = RECEIPT_RULE + '|';
 const reject = (code, status) => { throw new ProductReviewError(code, status); };
 const validSecret = value => typeof value === 'string' && Buffer.byteLength(value, 'utf8') >= 32;
@@ -29,16 +30,24 @@ async function reviewAndIssueProductReceipt({ rows, expectedVersions, platformTo
   const fixedRows = freezeProductRows(rows);
   if (!fixedRows.length) reject('PRODUCT_PAYLOAD_INVALID', 400);
   const versions = freezeVersions(expectedVersions, fixedRows.length);
+  const deadlineAt=now+REVIEW_DEADLINE_MS;
+  const boundedFetch=async(url,options={})=>{
+    const remaining=deadlineAt-clock();
+    if(!Number.isSafeInteger(remaining)||remaining<=0||remaining>REVIEW_DEADLINE_MS) reject('CONTENT_REVIEW_PENDING',503);
+    const signals=[AbortSignal.timeout(remaining)];if(options.signal)signals.push(options.signal);
+    return fetchImpl(url,{...options,signal:AbortSignal.any(signals)});
+  };
   // Reject the whole large batch before any identity/provider calls. Reserve
   // enough bytes for the fixed envelope fields added below.
   if (Buffer.byteLength(JSON.stringify({ rows: fixedRows, expectedVersions: versions }), 'utf8') > MAX_BYTES - 1024) {
     reject('PRODUCT_PAYLOAD_TOO_LARGE', 400);
   }
-  const identity = await authorizeProductReview({ platformToken, processingToken, publishableKey, secret, fetchImpl, now });
-  const reviewed = await reviewProductRows({ identity, rows: fixedRows, secret, fetchImpl, now, clock });
+  const identity = await authorizeProductReview({ platformToken, processingToken, publishableKey, secret, fetchImpl:boundedFetch, now });
+  const reviewed = await reviewProductRows({ identity, rows: fixedRows, secret, fetchImpl:boundedFetch, now, clock });
   const issuedAt = clock();
   if (!Number.isSafeInteger(issuedAt) || issuedAt < now) reject('RECEIPT_CLOCK_INVALID', 503);
   if (issuedAt >= identity.expiresAt) reject('WECHAT_SESSION_REQUIRED', 401);
+  if (issuedAt >= deadlineAt) reject('CONTENT_REVIEW_PENDING',503);
   const payload = JSON.stringify({ v: 1, ruleVersion: RECEIPT_RULE, reviewRule: RULE,
     applicationId: APPLICATION_ID, database: DATABASE, action: ACTION, owner: reviewed.owner,
     nonce: crypto.randomBytes(16).toString('hex'), issuedAt, expiresAt: Math.min(issuedAt + TTL_MS, identity.expiresAt),
@@ -72,4 +81,4 @@ function verifyProductReceipt({ receipt, receiptSecret, owner, now = Date.now() 
   } catch { return null; }
 }
 
-module.exports = { RECEIPT_RULE, DATABASE, ACTION, TTL_MS, MAX_BYTES, reviewAndIssueProductReceipt, verifyProductReceipt };
+module.exports = { RECEIPT_RULE, DATABASE, ACTION, TTL_MS, MAX_BYTES, REVIEW_DEADLINE_MS, reviewAndIssueProductReceipt, verifyProductReceipt };

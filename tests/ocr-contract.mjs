@@ -32,9 +32,12 @@ assert.throws(() => normalizeOcrResponse({ Response: { Error: { Code: "LimitExce
 assert.throws(() => normalizeOcrResponse(null), /OCR_MALFORMED_RESPONSE/);
 
 // 错误文案映射：已知码与未知码都有兜底。
-assert.match(friendlyOcrError("OCR_CREDENTIALS_MISSING"), /未配置/);
+assert.equal(friendlyOcrError("OCR_CREDENTIALS_MISSING"), "识别服务暂时不可用，请稍后再试。");
 assert.match(friendlyOcrError("FailedOperation_ImageNoText"), /没有识别到文字/);
-assert.match(friendlyOcrError("AuthFailure_SignatureFailure"), /密钥/);
+assert.equal(friendlyOcrError("AuthFailure_SignatureFailure"), "识别服务暂时不可用，请稍后再试。");
+for (const code of ["OCR_CREDENTIALS_MISSING", "AuthFailure_SignatureFailure", "AuthFailure_UnauthorizedOperation", "UnauthorizedOperation"]) {
+  assert.doesNotMatch(friendlyOcrError(code), /密钥|环境变量|权限|未配置/, "User errors must not expose server configuration details");
+}
 assert.match(friendlyOcrError("SomethingNew"), /稍后再试/);
 
 console.log("OCR contract passed.");

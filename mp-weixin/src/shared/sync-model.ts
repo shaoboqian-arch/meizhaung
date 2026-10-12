@@ -20,7 +20,7 @@ export interface DraftState {
 export type Outcome<T> = { ok: true; data: T } | { ok: false; kind: string; message: string };
 export interface SyncTransport {
   identity(): Promise<Outcome<string>>;
-  read(owner: string): Promise<Outcome<Snapshot>>;
+  read(owner: string, productIds?: string[]): Promise<Outcome<Snapshot>>;
   putProducts(owner: string, products: Product[]): Promise<Outcome<null>>;
   removeProduct(owner: string, id: string): Promise<Outcome<null>>;
   putProfile(owner: string, snapshot: Snapshot): Promise<Outcome<null>>;
@@ -151,7 +151,9 @@ export const createSyncCoordinator = (repo: ReturnType<typeof createLocalReposit
         if (upload) return { ok: false, message: "当前草稿不属于登录账号，请先登录并读取；原稿已保留" };
         repo.activate(owner);
       }
-      const remote = await transport.read(owner);
+      const localBeforeRead=repo.read(owner);
+      const requestedIds=[...new Set([...localBeforeRead.desiredSnapshot.localProducts.map(p=>p.id),...localBeforeRead.deletedProductIds])];
+      const remote = await transport.read(owner,requestedIds);
       if (!remote.ok) return remote;
       if (!validSnapshot(remote.data)) return { ok: false, message: "云端数据格式有误，本机草稿未覆盖" };
       if (repo.scope() !== owner) return { ok: false, message: "账号已切换，已停止同步" };
@@ -192,7 +194,7 @@ export const createSyncCoordinator = (repo: ReturnType<typeof createLocalReposit
         const result = await transport.putProfile(owner, withoutImages(sent)); if (!result.ok) return result;
       }
       if (!stillActive()) return { ok: false, message: "账号已切换，待同步记录保留" };
-      const receipt = await transport.read(owner);
+      const receipt = await transport.read(owner,sent.localProducts.map(p=>p.id));
       if (!receipt.ok) return { ok: false, message: `上传后回读失败，原稿及待同步记录保留：${receipt.message}` };
       if (!validSnapshot(receipt.data) || snapshotSignature(receipt.data) !== snapshotSignature(sent)) {
         return { ok: false, message: "上传后回读不一致，原稿及待同步记录保留" };

@@ -1,9 +1,10 @@
 import Taro from "@tarojs/taro";
 import { createMiniProgramWorkBuddyCloud } from "@tencent-ai/workbuddy-cloud-sdk/miniprogram";
 import { createDiagnosticWx } from "./workbuddy-cloud-diagnostics";
-import { defaultSelectedIds } from "./constants";
+import { cloudFailure } from "./cloud-errors";
 import { validSnapshot, type Outcome, type Snapshot, type SyncTransport } from "./sync-model";
-import { checkContentBeforeSave, ContentBlockedError, ContentPendingError } from "./wxsession";
+import { processingHeaders, invalidateRejectedProcessingSession } from "./wxsession";
+import { createReviewedTransport, type ReviewedPorts } from "./reviewed-transport";
 import type { Product } from "@shared/types";
 
 /** The existing public application key is not an edit credential. */
@@ -24,47 +25,21 @@ export const cloud = createMiniProgramWorkBuddyCloud<Database>({
   endpoint: publicConfig.endpoint, publishableKey: publicConfig.publishableKey,
   wx: createDiagnosticWx(Taro)
 });
-const messages: Record<string, string> = {
-  unauthenticated: "请先微信登录；本机原稿保留",
-  "permission-denied": "当前账号没有权限，原稿保留且未覆盖",
-  "not-found": "读取目标不存在，已停止覆盖",
-  "invalid-request": "请求格式有误，已停止同步",
-  "rate-limited": "操作太频繁，请稍后重试",
-  "credits-exhausted": "云服务额度已用尽，本机原稿保留",
-  "backend-unavailable": "同步服务暂不可用，本机改动保留",
-  network: "网络不通，本机改动及待同步记录保留"
-};
-const failure = (error: unknown, status?: number): Outcome<never> => {
-  if (error instanceof ContentBlockedError || error instanceof ContentPendingError) return {
-    ok: false, kind: error instanceof ContentBlockedError ? "content-blocked" : "content-pending",
-    message: error.message || "内容校验尚未完成，本机原稿保留，请稍后重试"
-  };
-  const e = error && typeof error === "object" ? error as Record<string, unknown> : {};
-  // Auth returns CloudError.kind; PostgREST returns code plus response.status.
-  // Never infer a missing record from a timeout or match localized message text.
-  const code = String(e.code ?? "");
-  const kind = typeof e.kind === "string" ? e.kind :
-    code === "42501" || status === 403 ? "permission-denied" :
-    status === 401 ? "unauthenticated" : status === 404 ? "not-found" :
-    status === 429 ? "rate-limited" : status !== undefined && status >= 500 ? "backend-unavailable" :
-    status === 400 || code.startsWith("22") || code.startsWith("23") ? "invalid-request" :
-    status === 0 ? "network" : "unknown";
-  return { ok: false, kind, message: messages[kind] ?? "同步服务调用失败，本机原稿保留，请重试" };
-};
+const failure=cloudFailure;
 const ok = <T,>(data: T): Outcome<T> => ({ ok: true, data });
+const rejectedPlatformTokens=new Set<string>();
+function rejectPlatformToken(token:string){
+  rejectedPlatformTokens.add(token);
+  if(rejectedPlatformTokens.size>32)rejectedPlatformTokens.delete(rejectedPlatformTokens.values().next().value!);
+}
 
 export const getIdentity = async (): Promise<Outcome<string>> => {
   try {
     const { data, error } = await cloud.auth.getSession();
     if (error) return failure(error);
-    if (!data?.user?.id || data.user.isAnonymous) return failure({ kind: "unauthenticated" });
+    if (!data?.user?.id || data.user.isAnonymous || !data.accessToken || rejectedPlatformTokens.has(data.accessToken)) return failure({ kind: "unauthenticated" });
     return ok(data.user.id);
   } catch (error) { return failure(error); }
-};
-const guard = async (owner: string): Promise<Outcome<null>> => {
-  const identity = await getIdentity();
-  if (!identity.ok) return identity;
-  return identity.data === owner ? ok(null) : { ok: false, kind: "account-changed", message: "账号已变化，已停止同步" };
 };
 
 export const signInWithWechat = async () => {
@@ -79,75 +54,35 @@ export const signInWithWechat = async () => {
   } catch (error) { return failure(error); }
 };
 
-export const syncTransport: SyncTransport = {
-  identity: getIdentity,
-  async read(owner) {
-    const access = await guard(owner);
-    if (!access.ok) return access;
-    try {
-      const [products, profile] = await Promise.all([
-        cloud.database.from("user_products").select("product_id, brand, model, category, ingredient_ids, notes")
-          .order("created_at", { ascending: true }),
-        cloud.database.from("user_profiles").select("skin_concerns, selected_ids").maybeSingle()
-      ]);
-      if (products.error) return failure(products.error, products.status);
-      if (profile.error) return failure(profile.error, profile.status);
-      if (!Array.isArray(products.data)) return failure({ kind: "invalid-request" });
-      const p = profile.data as ProfileRow | null;
-      const snapshot: Snapshot = {
-        localProducts: (products.data as ProductRow[]).map((r) => ({
-          id: r.product_id, brand: r.brand, model: r.model, category: r.category,
-          ingredientIds: r.ingredient_ids, ...(r.notes == null ? {} : { notes: r.notes })
-        })),
-        selectedIds: p ? p.selected_ids : [...defaultSelectedIds],
-        skinConcerns: p ? p.skin_concerns : []
-      };
-      if (!validSnapshot(snapshot)) return failure({ kind: "invalid-request" });
-      const rechecked = await guard(owner);
-      return rechecked.ok ? ok(snapshot) : rechecked;
-    } catch (error) { return failure(error); }
+// Candidate rollout uses the fixed app SDK session and PostgreSQL RPCs only.
+const databaseRpc=cloud.database as unknown as {rpc:ReviewedPorts["rpc"]};
+export const syncTransport:SyncTransport=createReviewedTransport({
+  identity:getIdentity,
+  async rpc(name,args){
+    const {data,error}=await cloud.auth.getSession();
+    if(error)return {data:null,error};
+    if(!data?.accessToken||data.user?.isAnonymous||rejectedPlatformTokens.has(data.accessToken))return {data:null,error:{kind:'unauthenticated'},status:401};
+    const reply=await databaseRpc.rpc(name,args);
+    if(reply.status===401)rejectPlatformToken(data.accessToken);
+    return reply;
   },
-  async putProducts(owner, products) {
-    if (!products.length) return ok(null);
+  async review(rows,versions,owner) {
+    const {data,error}=await cloud.auth.getSession();
+    if(error)return failure(error);
+    if(!data||data.user?.isAnonymous||data.user?.id!==owner||!data.accessToken)return {ok:false,kind:"unauthenticated",message:"请重新微信登录，本机原稿保留。"};
+    const header=await processingHeaders();
+    let reply;
     try {
-      if (!validSnapshot({ localProducts: products, selectedIds: [], skinConcerns: [] })) return failure({ kind: "invalid-request" });
-      // Freeze the exact outgoing fields before any asynchronous checks. Imports and sync
-      // share this gate; page-level checks alone cannot cover every cloud write.
-      const rows = products.map((p) => ({
-        product_id: p.id, brand: p.brand, model: p.model, category: p.category,
-        ingredient_ids: [...p.ingredientIds], notes: p.notes ?? null
-      }));
-      const access = await guard(owner);
-      if (!access.ok) return access;
-      // Per-product requests keep a large import from exceeding the review API's
-      // per-request text limit. Commit the batch only after every product passes.
-      for (const row of rows) await checkContentBeforeSave([
-        row.product_id, row.brand, row.model, row.category, ...row.ingredient_ids, row.notes
-      ]);
-      const rechecked = await guard(owner);
-      if (!rechecked.ok) return rechecked;
-      // Only operation deltas, never a full product-table replacement; no owner_id or device image path.
-      // This client gate does not replace the outstanding server/DB review binding.
-      const { error, status } = await cloud.database.from("user_products").upsert(rows, { onConflict: "owner_id,product_id" });
-      return error ? failure(error, status) : ok(null);
-    } catch (error) { return failure(error); }
-  },
-  async removeProduct(owner, id) {
-    const access = await guard(owner);
-    if (!access.ok) return access;
-    try {
-      const { error, status } = await cloud.database.from("user_products").delete().eq("product_id", id).select("product_id");
-      return error ? failure(error, status) : ok(null); // Zero rows can be an idempotent retry. Final GET proves absence.
-    } catch (error) { return failure(error); }
-  },
-  async putProfile(owner, snapshot) {
-    const access = await guard(owner);
-    if (!access.ok) return access;
-    try {
-      const { error, status } = await cloud.database.from("user_profiles").upsert({
-        skin_concerns: snapshot.skinConcerns, selected_ids: snapshot.selectedIds
-      }, { onConflict: "owner_id" });
-      return error ? failure(error, status) : ok(null);
-    } catch (error) { return failure(error); }
+      reply=await Taro.request({url:"https://qianshaobo-d3gjx8wkh621904d1.service.tcloudbase.com/meizhaung-sync/owned-products/review",
+        method:"POST",timeout:60000,header:{...header,"X-WB-Platform-Session":data.accessToken},data:{rows,expectedVersions:versions}});
+    } catch {return {ok:false,kind:"content-pending",message:"云端内容校验暂未完成，本机原稿保留。"};}
+    const body=reply.data as any;
+    if(reply.statusCode===401&&['PLATFORM_SESSION_REQUIRED','PLATFORM_SESSION_REJECTED'].includes(body?.code)||reply.statusCode===403&&body?.code==='IDENTITY_MISMATCH')rejectPlatformToken(data.accessToken);
+    if(reply.statusCode===401&&body?.code==="WECHAT_SESSION_REQUIRED"||reply.statusCode===403&&body?.code==='IDENTITY_MISMATCH')invalidateRejectedProcessingSession(header.Authorization);
+    if(reply.statusCode!==200||body?.ok!==true||body.ruleVersion!=="beauty-owned-write-v1"||typeof body.receipt?.payload!=="string"||typeof body.receipt?.signature!=="string") {
+      return {ok:false,kind:reply.statusCode===401||body?.code==='IDENTITY_MISMATCH'?"unauthenticated":body?.code==="CONTENT_REJECTED"?"content-blocked":"content-pending",
+        message:typeof body?.error==="string"?body.error:"云端内容校验暂未完成，本机原稿保留。"};
+    }
+    return {ok:true,data:{payload:body.receipt.payload,signature:body.receipt.signature}};
   }
-};
+});

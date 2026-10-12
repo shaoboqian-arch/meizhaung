@@ -204,17 +204,14 @@ test("真实折叠组件默认不渲染解释正文", () => {
 test("SDK适配层失败分类保留，产品和profile读取均不伪装为空", async () => {
   const fixtureCloud = cloud as any;
   for (const kind of ["network", "permission-denied", "invalid-request", "not-found"]) {
-    fixtureCloud.database.from = () => ({ select: () => ({
-      order: async () => ({ data: null, error: { kind } }),
-      maybeSingle: async () => ({ data: null, error: { kind } })
-    }) });
+    fixtureCloud.database.rpc = async () => ({ data:null,error:{kind} });
     const result = await syncTransport.read("synthetic-owner");
     assert.equal(result.ok, false); if (!result.ok) assert.equal(result.kind, kind);
   }
 });
 test("SDK适配层账号不符时禁止读写", async () => {
   const fixtureCloud = cloud as any;
-  fixtureCloud.database.from = () => assert.fail("unexpected database call");
+  fixtureCloud.database.rpc = () => assert.fail("unexpected database call");
   assert.equal((await syncTransport.read("other-owner")).ok, false);
   assert.equal((await syncTransport.putProducts("other-owner", [p("new")])).ok, false);
   assert.equal((await syncTransport.putProfile("other-owner", initial)).ok, false);
@@ -224,10 +221,7 @@ test("真实PostgREST错误形状按HTTP状态及code分类，不依赖kind或�
   const fixtureCloud = cloud as any;
   for (const [status, code, expected] of [[403, "42501", "permission-denied"], [404, "", "not-found"],
     [400, "22P02", "invalid-request"], [503, "", "backend-unavailable"], [0, "", "network"]] as const) {
-    fixtureCloud.database.from = () => ({ select: () => ({
-      order: async () => ({ data: null, error: { code, message: "不用于分类" }, status }),
-      maybeSingle: async () => ({ data: null, error: { code, message: "不用于分类" }, status })
-    }) });
+    fixtureCloud.database.rpc = async () => ({data:null,error:{code,message:"不用于分类"},status});
     const result = await syncTransport.read("synthetic-owner");
     assert.equal(result.ok, false); if (!result.ok) assert.equal(result.kind, expected);
   }
@@ -237,11 +231,10 @@ test("真实storage登录入口零写入，旧草稿只在手动导入后进入�
   let writeCount = 0;
   Taro.setStorageSync("beauty-products", [p("original-guest")]);
   Taro.setStorageSync("beauty-selected-ids", ["original-guest"]);
-  fixtureCloud.database.from = (table: string) => ({
-    select: () => ({ order: async () => ({ data: [], error: null }),
-      maybeSingle: async () => ({ data: { selected_ids: ["cloud-only"], skin_concerns: ["敏感"] }, error: null }) }),
-    upsert: () => { writeCount++; assert.fail(`unexpected ${table} write`); }
-  });
+  fixtureCloud.database.rpc = async (name:string,args:any) => {
+    if(name!=="beauty_read_owned_snapshot_v1"){writeCount++;assert.fail(`unexpected ${name} write`);}
+    return {error:null,data:{ruleVersion:"beauty-owned-write-v1",products:[],profile:{selected_ids:["cloud-only"],skin_concerns:["敏感"]},versions:{profile:1,products:args.p_extra_ids.map((id:string)=>({product_id:id,version:0}))}}};
+  };
   useGuestDraft(); assert.equal(getLocalProducts()[0].id, "original-guest");
   assert.equal((await signInAndSync()).ok, true);
   assert.deepEqual(getLocalProducts(), []); assert.equal(writeCount, 0);

@@ -1,6 +1,7 @@
-// Candidate only: no route imports this module until the private writer is accepted.
+// Candidate issuer shares these identity/projection rules; rollout requires the database writer.
 const { verifyProcessingIdentity } = require('./processingIdentity');
 const { OPENID_PATTERN, msgSecCheck, classifySecCheck } = require('./wxsec');
+const productRules = require('./ownedProductRules.generated.json');
 
 const RULE = 'beauty-product-review-v1';
 const APPLICATION_ID = 'wbapp_t1U4NdF6I0IZdm8LzoMLq6';
@@ -57,18 +58,18 @@ async function reviewProductRows({ identity, rows, secret, fetchImpl = fetch, no
 // A receipt issuer also freezes caller input before remote identity validation.
 // Keep field projection and validation in this one implementation.
 function freezeProductRows(rows) {
-  if (!Array.isArray(rows) || rows.length > 50) reject('PRODUCT_PAYLOAD_INVALID', 400);
+  if (!Array.isArray(rows) || rows.length > productRules.maxRows) reject('PRODUCT_PAYLOAD_INVALID', 400);
   const ids = new Set();
   const frozen = rows.map(row => {
     const fields = ['product_id', 'brand', 'model', 'category', 'ingredient_ids', 'notes'];
     if (!row || typeof row !== 'object' || Array.isArray(row) || Object.keys(row).some(key => !fields.includes(key)) ||
         !['product_id', 'brand', 'model', 'category'].every(key => typeof row[key] === 'string') || !row.product_id ||
-        !Array.isArray(row.ingredient_ids) || !row.ingredient_ids.every(id => typeof id === 'string') ||
+        !productRules.categories.includes(row.category) || !Array.isArray(row.ingredient_ids) || !row.ingredient_ids.every(id => typeof id === 'string') ||
         !(row.notes === undefined || row.notes === null || typeof row.notes === 'string') || ids.has(row.product_id)) reject('PRODUCT_PAYLOAD_INVALID', 400);
     ids.add(row.product_id);
     const fixed = { product_id: row.product_id, brand: row.brand, model: row.model, category: row.category,
       ingredient_ids: Object.freeze([...row.ingredient_ids]), notes: row.notes ?? null };
-    if (Buffer.byteLength(JSON.stringify(fixed), 'utf8') > 32768 || rowContent(fixed).length > 8000) reject('PRODUCT_PAYLOAD_TOO_LARGE', 400);
+    if (Buffer.byteLength(JSON.stringify(fixed), 'utf8') > productRules.maxRowBytes || rowContent(fixed).length > productRules.maxTextLength) reject('PRODUCT_PAYLOAD_TOO_LARGE', 400);
     return Object.freeze(fixed);
   });
   return Object.freeze(frozen);

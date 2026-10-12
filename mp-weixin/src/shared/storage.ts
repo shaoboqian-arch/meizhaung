@@ -16,7 +16,7 @@ const repo = createLocalRepository({
 // SDK is loaded only by a synchronization action, never by local getters / the first screen.
 const transport: SyncTransport = {
   identity: async () => (await import("./cloud")).syncTransport.identity(),
-  read: async (owner) => (await import("./cloud")).syncTransport.read(owner),
+  read: async (owner, productIds) => (await import("./cloud")).syncTransport.read(owner, productIds),
   putProducts: async (owner, products) => (await import("./cloud")).syncTransport.putProducts(owner, products),
   removeProduct: async (owner, id) => (await import("./cloud")).syncTransport.removeProduct(owner, id),
   putProfile: async (owner, snapshot) => (await import("./cloud")).syncTransport.putProfile(owner, snapshot)

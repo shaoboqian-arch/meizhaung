@@ -278,26 +278,24 @@ test("真实storage两按钮闭环：读取零云写，保存回读后完成，�
   const { cloud } = await import("../src/shared/cloud");
   const { PROCESSING_SESSION_KEY } = await import("../src/shared/wxsession");
   const fixtureCloud = cloud as any;
-  const originalFrom = fixtureCloud.database.from;
+  const originalRpc = fixtureCloud.database.rpc;
+  const originalSession = fixtureCloud.auth.getSession;
   const originalRequest = Taro.request;
   let approved = false, reviews = 0;
   Taro.setStorageSync(PROCESSING_SESSION_KEY, { openid: "o".repeat(28), processingToken: "wxc_synthetic." + "a".repeat(64), expiresAt: Date.now() + 60_000 });
-  Taro.request = (async () => { reviews++; return { statusCode: 200, data: approved ? { ok: true } : { ok: true, pending: true } }; }) as never;
+  fixtureCloud.auth.getSession=async()=>({data:{user:{id:'synthetic-owner',isAnonymous:false},accessToken:'synthetic-platform'},error:null});
+  Taro.request = (async (options:any) => { reviews++; return { statusCode: approved?200:503, data: approved ? { ok: true,ruleVersion:'beauty-owned-write-v1',receipt:{payload:JSON.stringify({owner:'synthetic-owner',ruleVersion:'beauty-product-receipt-v1',applicationId:'wbapp_t1U4NdF6I0IZdm8LzoMLq6',database:'postgres-lgjvhh7s',action:'owned.products.upsert',nonce:'e'.repeat(32),rows:options.data.rows,expectedVersions:options.data.expectedVersions}),signature:'b'.repeat(64)}} : { pending: true } }; }) as never;
   const rows: any[] = [];
   let profile: any = null; let writes = 0;
-  fixtureCloud.database.from = (table: string) => ({
-    select: () => ({ order: async () => ({ data: JSON.parse(JSON.stringify(rows)), error: null }),
-      maybeSingle: async () => ({ data: profile && JSON.parse(JSON.stringify(profile)), error: null }) }),
-    upsert: async (values: any) => {
-      writes++;
-      if (table === "user_profiles") profile = JSON.parse(JSON.stringify(values));
-      else for (const row of values) {
-        const index = rows.findIndex((existing) => existing.product_id === row.product_id);
-        if (index < 0) rows.push({ ...row }); else rows[index] = { ...row };
-      }
-      return { error: null, status: 200 };
-    }
-  });
+  const versions=new Map<string,number>();let profileVersion=0;
+  fixtureCloud.database.rpc = async(name:string,args:any) => {
+    if(name==='beauty_read_owned_snapshot_v1')return {error:null,data:{ruleVersion:'beauty-owned-write-v1',products:JSON.parse(JSON.stringify(rows)),profile:profile&&JSON.parse(JSON.stringify(profile)),versions:{profile:profileVersion,products:[...new Set([...args.p_extra_ids,...rows.map(r=>r.product_id)])].map(id=>({product_id:id,version:versions.get(id as string)??0}))}}};
+    writes++;
+    if(name==='beauty_put_profile_v1'){profile={selected_ids:args.p_selected_ids,skin_concerns:args.p_skin_concerns};profileVersion++;return {error:null,data:{ruleVersion:'beauty-owned-write-v1',version:profileVersion}};}
+    assert.equal(name,'beauty_commit_products_v1');const packet=JSON.parse(args.p_payload);
+    for(const row of packet.rows){const index=rows.findIndex(existing=>existing.product_id===row.product_id);if(index<0)rows.push({...row});else rows[index]={...row};versions.set(row.product_id,(versions.get(row.product_id)??0)+1);}
+    return {error:null,data:{ruleVersion:'beauty-owned-write-v1',nonce:packet.nonce,versions:packet.rows.map((r:any)=>({product_id:r.product_id,version:versions.get(r.product_id)}))}};
+  };
   try {
     useGuestDraft(); const guestProducts = getLocalProducts();
     const original = JSON.stringify(Taro.getStorageSync("beauty-mp-state-v1:guest"));
@@ -309,5 +307,5 @@ test("真实storage两按钮闭环：读取零云写，保存回读后完成，�
     const state = Taro.getStorageSync("beauty-mp-state-v1:synthetic-owner");
     assert.equal(state.journalId, null);
     assert.equal(JSON.stringify(Taro.getStorageSync("beauty-mp-state-v1:guest")), original);
-  } finally { fixtureCloud.database.from = originalFrom; Taro.request = originalRequest; useGuestDraft(); }
+  } finally { fixtureCloud.database.rpc = originalRpc; fixtureCloud.auth.getSession=originalSession; Taro.request = originalRequest; useGuestDraft(); }
 });

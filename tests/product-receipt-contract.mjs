@@ -82,10 +82,12 @@ test('correctly signed wrong context or malformed version still rejected by reci
 });
 
 test('expiry bounded by processing session; expired/future/noninteger clocks cannot authorize',async()=>{
- const f=fixture(), issuedAt=now+SESSION_TTL-1;
+ const f=fixture(), issuedAt=now;
+ // Session is already near expiry; the review itself stays within its new 45s deadline.
+ f.params.processingToken=issueProcessingIdentity(openid,secret,now-SESSION_TTL+1000).processingToken;
  const receipt=await reviewAndIssueProductReceipt({...f.params,clock:()=>issuedAt});
- assert.equal(verifyProductReceipt({receipt,receiptSecret,owner,now:issuedAt}).expiresAt,now+SESSION_TTL);
- assert.equal(verifyProductReceipt({receipt,receiptSecret,owner,now:now+SESSION_TTL}),null);
+ assert.equal(verifyProductReceipt({receipt,receiptSecret,owner,now:issuedAt}).expiresAt,now+1000);
+ assert.equal(verifyProductReceipt({receipt,receiptSecret,owner,now:now+1000}),null);
  assert.equal(verifyProductReceipt({receipt,receiptSecret,owner,now:now-1}),null);
  assert.equal(verifyProductReceipt({receipt,receiptSecret,owner,now:NaN}),null);
  for(const clock of [()=>now+SESSION_TTL,()=>now-1,()=>Infinity])await assert.rejects(reviewAndIssueProductReceipt({...fixture().params,clock}));
@@ -98,5 +100,5 @@ test('verification bounds attacker payload before parsing and tolerates malforme
 test('separate reviewed operations have distinct nonces; verification alone explicitly does not consume writes',async()=>{
  const one=await reviewAndIssueProductReceipt(fixture().params), two=await reviewAndIssueProductReceipt(fixture().params);
  assert.notEqual(verify(one).nonce,verify(two).nonce);assert.ok(verify(one));assert.ok(verify(one));
- // Persistence/atomic replay control belongs to the not-yet-connected writer.
+ // PostgreSQL consumes and persists operations; this local verifier only checks signatures.
 });

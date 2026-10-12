@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const processingQuota = require("./processingQuota");
 const { parseImageBase64 } = require("./imagePayload");
 const { issueProcessingIdentity, verifyProcessingIdentity } = require("./processingIdentity");
+const { createProductReceiptHandler } = require("./productWriteRoute");
 const express = require("express");
 const cloudbase = require("@cloudbase/node-sdk");
 const {
@@ -49,7 +50,7 @@ function applyCors(request, response) {
     response.set("Vary", "Origin");
   }
   response.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Routine-Edit-Credential");
+  response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Routine-Edit-Credential, X-WB-Platform-Session");
   response.set("Cache-Control", "no-store");
 }
 
@@ -189,6 +190,13 @@ server.get("/health", (_request, response) => {
   response.json({ ok: true, service: "meizhaung-routine-sync", sourceSha:process.env.MEIZHAUNG_SOURCE_SHA || "unversioned",
     processingBudgetRule:processingQuota.RULE_VERSION, processingBudgetConfigured:Boolean(processingQuota.resolvePolicy("ocr")) });
 });
+
+// Activated only by an independently configured receipt key and the fixed app key.
+// This issues reviewed receipts; the database RPC independently enforces owner/version/nonce.
+server.post("/owned-products/review", createProductReceiptHandler({configuration:()=>({
+  wxSecret:resolveWxSecret(), receiptSecret:process.env.BEAUTY_PRODUCT_RECEIPT_SECRET,
+  publishableKey:process.env.BEAUTY_WORKBUDDY_PUBLISHABLE_KEY
+})}));
 
 server.post("/combinations", async (request, response) => {
   try {
