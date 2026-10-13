@@ -47,15 +47,14 @@ export default function HhidAccount() {
         if(failure.code==='changed') {setUid('');setCode('');setPhase('unbound');}
         if(failure.code==='wechatUnauthenticated')setNeedsWechat(true);
         setFailed(true);
-        setMessage(error instanceof Error?error.message:'共用账号暂不可用，请重试');
+        setMessage(error instanceof Error?error.message:'HHID 账号暂不可用，请重试');
       }
     } finally {lock.current=false;if(alive.current)setBusy(false);}
   }
   useDidShow(()=>{void run('refresh');});
   return <View className="hhid-account">
-    <View className="hhid-heading"><Text className="hhid-title">HHID 共用账号</Text><Text className="hhid-note">{needsWechat?'登录需更新':phase==='connected'?'已连接':'未连接'}</Text></View>
+    <View className="hhid-heading"><Text className="hhid-title">HHID 账号</Text><Text className="hhid-note">{needsWechat?'登录需更新':phase==='connected'?'已连接':'未连接'}</Text></View>
     {uid && <View className="hhid-row"><Text className="hhid-uid">{uid}</Text><Button className="hhid-link" onClick={()=>Taro.setClipboardData({data:uid}).catch(()=>setMessage('复制失败，请重试'))}>复制</Button></View>}
-    {!uid && <Text className="hhid-note">美妆、健身、拼豆共用一个账号。</Text>}
     {message && (failed || open || phase==='save-pending') && <Text className={'hhid-notice'+(failed?' hhid-error':'')}>{message}</Text>}
     {needsWechat && <Button className="hhid-button primary" disabled={busy} onClick={()=>run('wechat')}>{busy?'正在登录…':'重新微信登录'}</Button>}
     {!open && !needsWechat && <Button className={uid?'hhid-manage':'hhid-button primary'} disabled={busy} onClick={()=>setOpen(true)}>{uid?'管理账号 ›':'登录 / 注册'}</Button>}

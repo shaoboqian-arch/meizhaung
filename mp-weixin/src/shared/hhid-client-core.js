@@ -5,8 +5,8 @@ const ENDPOINT = 'https://qianshaobo-d3gjx8wkh621904d1.service.tcloudbase.com/be
 const UID = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/
 const TOKEN = /^qsb_[0-9a-f]{48}$/
 const MESSAGES = {
-  unavailable: '共用账号暂不可用，请稍后重试；本机记录保留',
-  outdated: '共用账号服务待更新，输入和本机记录已保留',
+  unavailable: 'HHID 账号暂不可用，请稍后重试；本机记录保留',
+  outdated: 'HHID 账号服务待更新，输入和本机记录已保留',
   storage: 'HHID 登录状态保存或读取失败，请保留恢复码并重试',
   changed: '微信账号已变化，旧账号操作已停止',
   busy: '账号操作进行中，请稍候',

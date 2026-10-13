@@ -174,7 +174,7 @@ const previewCss = (width) => {
       assert.equal(overflow, false);
       await page.screenshot({ path: path.join(out, `analysis-${width}.png`), fullPage: true, animations: "disabled" });
       await page.getByRole("button", { name: "我的", exact: true }).click();
-      await page.getByText("HHID 共用账号", { exact: true }).waitFor();
+      await page.getByText("HHID 账号", { exact: true }).waitFor();
       assert.equal(await page.locator('.hhid-form').count(),0);
       assert.equal(await page.locator('.cloud-action').count(),0);
       assert.equal(await page.locator('.reference-photos').count(),0);
