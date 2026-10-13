@@ -23,6 +23,8 @@ function createProductReceiptHandler({ configuration, fetchImpl=fetch, clock=Dat
       return response.json({ok:true,ruleVersion:RULE,receipt});
     } catch(error) {
       const known=error instanceof ProductReviewError;
+      // 排障日志（2026-10-13 会话失效诊断）：只记错误码/消息，不含任何用户数据。
+      console.log('[ProductReview] reject', known?error.code:((error && error.message) || 'unknown'));
       return response.status(known?error.status:503).json({ok:false,pending:true,code:known?error.code:'PRODUCT_REVIEW_UNAVAILABLE',
         error:messages[error.code]||'云端内容校验尚未完成，本机原稿保留，请稍后重试。'});
     }
