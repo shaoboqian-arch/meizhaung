@@ -80,7 +80,7 @@
   width: 100%;
 }
 
-.condition-switch {
+button.condition-switch {
   width: 100%;
   min-height: 244px;
   padding: 8px 8px 12px;
@@ -99,18 +99,18 @@
 }
 
 /* WXSS conversion removes grid gap; preserve row spacing explicitly. */
-.condition-grid > .condition-switch:nth-child(n + 3) {
+.condition-grid > button.condition-switch:nth-child(n + 3) {
   margin-top: 24px;
 }
 
-.condition-switch.active {
+button.condition-switch.active {
   border-color: #e0705a;
   background: linear-gradient(160deg, #fff5ee, #fff8f3 40%, #fdf6f0);
   box-shadow: 0 0 0 6px rgba(224, 112, 90, 0.08), 0 8px 24px rgba(180, 80, 50, 0.1);
   transform: translateY(-3px);
 }
 
-.condition-switch:active {
+button.condition-switch:active {
   transform: scale(0.97);
 }
 
@@ -129,7 +129,7 @@
   box-shadow: 0 8px 20px rgba(116, 74, 52, 0.08);
 }
 
-.condition-switch.active .condition-illustration {
+button.condition-switch.active .condition-illustration {
   background: #fff4ec;
   box-shadow: 0 8px 24px rgba(224, 112, 90, 0.22);
   transform: scale(1.03);
@@ -158,7 +158,7 @@
   color: #3d2e24;
 }
 
-.condition-switch.active .condition-name {
+button.condition-switch.active .condition-name {
   color: #d05842;
 }
 
@@ -175,7 +175,7 @@
   display: none;
 }
 
-.condition-switch.active .switch-dot {
+button.condition-switch.active .switch-dot {
   display: none;
 }
 
@@ -183,7 +183,7 @@
   display: none;
 }
 
-.condition-switch.active .switch-dot::after {
+button.condition-switch.active .switch-dot::after {
   display: none;
 }
 
@@ -193,7 +193,7 @@
   margin-top: 16px;
 }
 
-.cloud-action {
+button.cloud-action {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -211,12 +211,12 @@
   transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.cloud-action.primary {
+button.cloud-action.primary {
   background: #df7861;
   color: #ffffff;
 }
 
-.cloud-action:active {
+button.cloud-action:active {
   transform: scale(0.97);
 }
 
@@ -227,12 +227,12 @@
   width: 100%;
   margin-top: 12px;
 }
-.cloud-pair .cloud-action,
+.cloud-pair button.cloud-action,
 .cloud-links .cloud-link {
   flex: 1;
   min-width: 0;
 }
-.cloud-pair .cloud-action + .cloud-action { margin-left: 12px; }
+.cloud-pair button.cloud-action + button.cloud-action { margin-left: 12px; }
 .cloud-actions .cloud-pair { margin-top: 0; }
 .cloud-link {
   margin: 0;
@@ -259,12 +259,12 @@
 }
 .account-panel { box-shadow:none; border-radius:20px; }
 .account-settings { padding:0 26px; box-shadow:none; border-radius:20px; }
-.account-setting-row { width:100%; min-height:100px; margin:0; padding:20px 0; display:flex; align-items:center; justify-content:space-between; background:transparent; border:0; border-radius:0; font-size:27px; font-weight:500; color:#513528; text-align:left; line-height:1.4; }
-.account-setting-row::after { border:0; }
-.account-setting-row + .account-setting-row { border-top:1px solid #e8ddd2; }
+button.account-setting-row { width:100%; min-height:100px; margin:0; padding:20px 0; display:flex; align-items:center; justify-content:space-between; background:transparent; border:0; border-radius:0; font-size:27px; font-weight:500; color:#513528; text-align:left; line-height:1.4; }
+button.account-setting-row::after { border:0; }
+button.account-setting-row + button.account-setting-row { border-top:1px solid #e8ddd2; }
 .account-row-arrow { color:#765f52; font-size:30px; margin-left:20px; }
 .account-setting-body { padding:0 0 24px; }
 .account-setting-body .reference-photos { margin-top:0; padding-top:0; border-top:0; }
 .account-setting-body .cloud-note { color:#765f52; }
 
-.cloud-action { min-height:88px; padding:14px 18px; line-height:1.4; }
+button.cloud-action { min-height:88px; padding:14px 18px; line-height:1.4; }

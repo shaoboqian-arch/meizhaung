@@ -3,11 +3,11 @@
 .reference-title { display:block; color:#513528; font-size:25px; font-weight:500; line-height:1.4; }
 .reference-note { display:block; color:#765f52; font-size:22px; line-height:1.6; }
 .reference-status { margin-bottom:12px; }
-.reference-link { flex-shrink:0; margin:0; min-height:88px; display:flex; align-items:center; justify-content:center; padding:14px 18px; color:#765343; background:transparent; border:0; border-radius:12px; font-size:23px; line-height:1.4; }
-.reference-link::after { border:0; }
+button.reference-link { flex-shrink:0; margin:0; min-height:88px; display:flex; align-items:center; justify-content:center; padding:14px 18px; color:#765343; background:transparent; border:0; border-radius:12px; font-size:23px; line-height:1.4; }
+button.reference-link::after { border:0; }
 .reference-photo { display:flex; align-items:center; padding:18px 0; border-bottom:1px solid #e8ddd2; }
 .reference-image { flex-shrink:0; width:84px; height:84px; border-radius:12px; }
 .reference-missing { display:flex; align-items:center; justify-content:center; background:#f4ece3; color:#776055; font-size:22px; }
 .reference-copy { flex:1; min-width:0; padding:0 14px; }
 .reference-copy .reference-note { margin-top:4px; }
-.reference-photos > view > .reference-link { width:100%; margin-top:16px; background:#f4ede5; }
+.reference-photos > view > button.reference-link { width:100%; margin-top:16px; background:#f4ede5; }

@@ -87,7 +87,7 @@
   padding-top: 18px;
 }
 
-.primary-btn {
+button.primary-btn {
   height: 78px;
   border-radius: 14px;
   background: linear-gradient(135deg, #e86f5c, #e89564);
@@ -97,7 +97,7 @@
   box-shadow: 0 10px 20px rgba(232, 111, 92, 0.22);
 }
 
-.secondary-btn {
+button.secondary-btn {
   min-height: 64px;
   padding: 0 18px;
   border: 1px solid rgba(232, 111, 92, 0.26);
@@ -191,7 +191,7 @@
   gap: 10px;
 }
 
-.ingredient-filter {
+button.ingredient-filter {
   min-height: 58px;
   margin: 0;
   padding: 0 18px;
@@ -203,7 +203,7 @@
   line-height: 58px;
 }
 
-.ingredient-filter.active {
+button.ingredient-filter.active {
   border-color: transparent;
   background: linear-gradient(135deg, #e86f5c, #f0a36d);
   color: #fffaf6;
@@ -264,7 +264,7 @@
   padding-bottom: 20px;
 }
 
-.ingredient-row {
+button.ingredient-row {
   width: 100%;
   min-height: 92px;
   margin-bottom: 10px;
@@ -279,7 +279,7 @@
   box-shadow: 0 7px 16px rgba(116, 74, 52, 0.055);
 }
 
-.ingredient-row.active {
+button.ingredient-row.active {
   border-color: rgba(232, 111, 92, 0.34);
   background: linear-gradient(135deg, #fff4ec, #fffdf9);
   box-shadow: 0 0 0 4px rgba(232, 111, 92, 0.08), 0 8px 18px rgba(116, 74, 52, 0.07);
@@ -325,7 +325,7 @@
   margin-bottom: 16px;
 }
 
-.tab-chip {
+button.tab-chip {
   padding: 10px 16px;
   border: 1px solid rgba(105, 72, 58, 0.12);
   border-radius: 14px;
@@ -334,7 +334,7 @@
   font-size: 24px;
 }
 
-.tab-chip.active {
+button.tab-chip.active {
   border-color: #e86f5c;
   background: #e86f5c;
   color: #ffffff;
@@ -455,32 +455,32 @@
   color: #b18470;
 }
 
-.primary-btn,
-.secondary-btn,
-.tab-chip,
+button.primary-btn,
+button.secondary-btn,
+button.tab-chip,
 .product-card,
 .analysis-card,
 .recommend-card,
 .ingredient-card,
-.selected-row,
-.category-row,
-.upload-card,
+button.selected-row,
+button.category-row,
+button.upload-card,
 .form-input,
 .form-textarea,
 .picker-field {
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
-.primary-btn:active,
-.secondary-btn:active,
-.tab-chip:active,
+button.primary-btn:active,
+button.secondary-btn:active,
+button.tab-chip:active,
 .product-card:active,
 .analysis-card:active,
 .recommend-card:active,
 .ingredient-card:active,
-.selected-row:active,
-.category-row:active,
-.upload-card:active {
+button.selected-row:active,
+button.category-row:active,
+button.upload-card:active {
   transform: scale(0.985);
 }
 
@@ -499,13 +499,13 @@
   background: linear-gradient(180deg, #fff4ec 0%, #fffdf9 100%);
 }
 
-.tab-chip {
+button.tab-chip {
   border-radius: 999px;
   background: #fffdf9;
   box-shadow: 0 7px 15px rgba(116, 74, 52, 0.06);
 }
 
-.tab-chip.active {
+button.tab-chip.active {
   background: linear-gradient(135deg, #e86f5c, #f0a36d);
   box-shadow: 0 10px 20px rgba(232, 111, 92, 0.2);
 }
@@ -593,7 +593,7 @@
   padding-top: 14px;
 }
 
-.primary-btn {
+button.primary-btn {
   height: 62px;
   width: 100%;
   border-radius: 12px;
@@ -603,7 +603,7 @@
   justify-content: center;
 }
 
-.secondary-btn {
+button.secondary-btn {
   min-height: 51px;
   padding: 0 14px;
   border-radius: 12px;
@@ -650,7 +650,7 @@
   overflow: visible;
 }
 
-.tab-chip {
+button.tab-chip {
   padding: 8px 13px;
   border-radius: 999px;
   font-size: 19px;
@@ -662,13 +662,13 @@
 .top { align-items:center; }
 .top > view { min-width:0; }
 .count-pill { flex-shrink:0; }
-.primary-btn,.secondary-btn { display:flex; align-items:center; justify-content:center; }
+button.primary-btn,button.secondary-btn { display:flex; align-items:center; justify-content:center; }
 @media (prefers-reduced-motion:reduce) {
   .page .top,.page .panel,.page .product-card,.page .analysis-card,.page .recommend-card,.page .ingredient-card,.page .skin-hero,.page .hero-art-image,.page .count-pill { animation:none; }
-  .page .primary-btn,.page .secondary-btn,.page .tab-chip,.page .product-card,.page .analysis-card,.page .recommend-card,.page .ingredient-card,.page .selected-row,.page .category-row,.page .upload-card,.page .form-input,.page .form-textarea,.page .picker-field,.page .condition-switch,.page .condition-illustration,.page .cloud-action { transition:none; }
-  .page .primary-btn:active,.page .secondary-btn:active,.page .tab-chip:active,.page .product-card:active,.page .condition-switch:active,.page .condition-switch.active,.page .condition-switch.active .condition-illustration { transform:none; }
+  .page button.primary-btn,.page button.secondary-btn,.page button.tab-chip,.page .product-card,.page .analysis-card,.page .recommend-card,.page .ingredient-card,.page button.selected-row,.page button.category-row,.page button.upload-card,.page .form-input,.page .form-textarea,.page .picker-field,.page button.condition-switch,.page .condition-illustration,.page button.cloud-action { transition:none; }
+  .page button.primary-btn:active,.page button.secondary-btn:active,.page button.tab-chip:active,.page .product-card:active,.page button.condition-switch:active,.page button.condition-switch.active,.page button.condition-switch.active .condition-illustration { transform:none; }
 }
 
 /* Simple actions use symmetric padding; content rows retain their own layout. */
-.primary-btn { height:auto; min-height:88px; padding:16px 20px; line-height:1.4; }
-.secondary-btn { min-height:88px; padding:14px 20px; line-height:1.4; }
+button.primary-btn { height:auto; min-height:88px; padding:16px 20px; line-height:1.4; }
+button.secondary-btn { min-height:88px; padding:14px 20px; line-height:1.4; }

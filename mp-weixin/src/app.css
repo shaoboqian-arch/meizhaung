@@ -31,3 +31,6 @@ button {
 
 /* 微信按钮默认描边来自伪元素，border:0 本身不会清除它。 */
 button::after { border: 0; }
+
+/* Override native v2 fixed width, without changing row/card intent. */
+.page button { width:auto; min-width:0; max-width:100%; margin-left:0; margin-right:0; }
