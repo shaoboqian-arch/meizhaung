@@ -24,13 +24,13 @@ async function authorizeProductReview({ platformToken, processingToken, publisha
       headers: { Authorization: 'Bearer ' + platformToken, 'x-wb-webapp-access-key': publishableKey }
     });
   } catch { reject('PLATFORM_IDENTITY_UNAVAILABLE', 503); }
-  if (response.status === 401 || response.status === 403) reject('PLATFORM_SESSION_REJECTED', 401);
+  if (response.status === 401 || response.status === 403) { console.log('[ProductReview] platform deny http', response.status); reject('PLATFORM_SESSION_REJECTED', 401); }
   if (!response.ok) reject('PLATFORM_IDENTITY_UNAVAILABLE', 503);
   let raw;
   try { raw = await response.json(); } catch { reject('PLATFORM_IDENTITY_MALFORMED', 503); }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) reject('PLATFORM_IDENTITY_MALFORMED', 503);
   // These are the raw wire fields parsed by the installed SDK's parseUser, not SDK result.user.id.
-  if (raw.is_anonymous === true || raw.scope === 'anonymous') reject('PLATFORM_SESSION_REJECTED', 401);
+  if (raw.is_anonymous === true || raw.scope === 'anonymous') { console.log('[ProductReview] platform session anonymous scope=', raw.scope); reject('PLATFORM_SESSION_REJECTED', 401); }
   const owner = typeof raw.sub === 'string' ? raw.sub : typeof raw.uid === 'string' ? raw.uid : '';
   if (typeof raw.sub === 'string' && typeof raw.uid === 'string' && raw.sub !== raw.uid) reject('PLATFORM_IDENTITY_MALFORMED', 503);
   if (owner !== 'wx:' + processing.openid) reject('IDENTITY_MISMATCH', 403);
