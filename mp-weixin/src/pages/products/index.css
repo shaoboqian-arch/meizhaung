@@ -220,3 +220,5 @@
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
+
+.danger-btn { display:flex; align-items:center; justify-content:center; min-height:88px; padding:14px 20px; font-size:24px; line-height:1.4; }

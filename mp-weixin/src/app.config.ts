@@ -27,7 +27,7 @@ export default defineAppConfig({
   tabBar: {
     color: "#9a7a6d",
     selectedColor: "#e86f5c",
-    backgroundColor: "#fffdf9",
+    backgroundColor: "#fbf6ef",
     borderStyle: "white",
     list: [
       { pagePath: "pages/analysis/index", text: "搭配" },

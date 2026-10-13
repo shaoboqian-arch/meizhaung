@@ -1,7 +1,7 @@
 .page {
   min-height: 100vh;
   padding: 24px;
-  background: linear-gradient(180deg, #fffaf4 0%, #fbf6ef 48%, #f6fbf5 100%);
+  background: linear-gradient(180deg, #fffaf4 0%, #fbf6ef 48%, #fbf6ef 100%);
 }
 
 .top {
@@ -668,3 +668,7 @@
   .page .primary-btn,.page .secondary-btn,.page .tab-chip,.page .product-card,.page .analysis-card,.page .recommend-card,.page .ingredient-card,.page .selected-row,.page .category-row,.page .upload-card,.page .form-input,.page .form-textarea,.page .picker-field,.page .condition-switch,.page .condition-illustration,.page .cloud-action { transition:none; }
   .page .primary-btn:active,.page .secondary-btn:active,.page .tab-chip:active,.page .product-card:active,.page .condition-switch:active,.page .condition-switch.active,.page .condition-switch.active .condition-illustration { transform:none; }
 }
+
+/* Simple actions use symmetric padding; content rows retain their own layout. */
+.primary-btn { height:auto; min-height:88px; padding:16px 20px; line-height:1.4; }
+.secondary-btn { min-height:88px; padding:14px 20px; line-height:1.4; }

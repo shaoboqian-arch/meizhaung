@@ -6,11 +6,12 @@ import {MAX_SAVED_BYTES,type PhotoInventory} from '../shared/reference-photo';
 import './ReferencePhotos.css';
 const space=(bytes:number)=>bytes<1024*1024?Math.ceil(bytes/1024)+' KB':(bytes/1024/1024).toFixed(1)+' MB';
 export default function ReferencePhotos(){
-  const [open,setOpen]=useState(false),[state,setState]=useState<PhotoInventory|null>(null),[message,setMessage]=useState('参考照片留在本机'),[busy,setBusy]=useState(false);
+  const [state,setState]=useState<PhotoInventory|null>(null),[message,setMessage]=useState('正在核对本机照片…'),[busy,setBusy]=useState(false);
   const [visible,setVisible]=useState(12);
   const alive=useRef(true),epoch=useRef(0),lock=useRef(false);
-  useEffect(()=>{alive.current=true;return()=>{alive.current=false;epoch.current++;};},[]);
-  useDidShow(()=>{epoch.current++;setState(null);setOpen(false);setVisible(12);setMessage('参考照片留在本机');});
+  useEffect(()=>{alive.current=true;void refresh();return()=>{alive.current=false;epoch.current++;};},[]);
+  // Mount and page-show may arrive together; the shared lock coalesces the read.
+  useDidShow(()=>{void refresh();});
   const current=(generation:number,scope:string)=>{try{return alive.current && generation===epoch.current && getLocalScope()===scope;}catch{return false;}};
   async function refresh(){
     if(lock.current)return;lock.current=true;setBusy(true);const generation=epoch.current;let scope='';
@@ -34,10 +35,9 @@ export default function ReferencePhotos(){
     finally{lock.current=false;if(alive.current){if(!current(generation,scope))setState(null);setBusy(false);}}
   }
   return <View className="reference-photos">
-    <View className="reference-heading"><Text className="reference-title">本机参考照片</Text><Button className="reference-link" disabled={busy} onClick={()=>{setOpen(!open);if(!open)void refresh();}}>{open?'收起':'管理'}</Button></View>
-    <Text className="reference-note">{message}</Text>
-    {open && <View>
-      {state && <Text className="reference-note">本机已保存 {space(state.totalBytes)} / {space(MAX_SAVED_BYTES)} · {state.scope==='guest'?'本机草稿':'当前账号'} {space(state.ownedBytes)}</Text>}
+    <Text className="reference-note reference-status">{message}</Text>
+    <View>
+      {state && state.photos.length > 0 && <Text className="reference-note">本机已保存 {space(state.totalBytes)} / {space(MAX_SAVED_BYTES)} · {state.scope==='guest'?'本机草稿':'当前账号'} {space(state.ownedBytes)}</Text>}
       {state?.photos.slice(0,visible).map((photo,index)=><View className="reference-photo" key={photo.path}>
         {photo.present?<Image className="reference-image" src={photo.path} mode="aspectFill" onClick={()=>Taro.previewImage({current:photo.path,urls:[photo.path]}).catch(()=>setMessage('预览暂不可用，请重试'))}/>:<View className="reference-image reference-missing"><Text>已缺失</Text></View>}
         <View className="reference-copy"><Text className="reference-title">照片 {index+1} · {space(photo.bytes)}</Text><Text className="reference-note">{photo.referenced?'使用中，已保护':photo.state==='removing'?'清理待核对':photo.present?'未引用，已保留':'本机文件已缺失'}</Text></View>
@@ -45,6 +45,6 @@ export default function ReferencePhotos(){
       </View>)}
       {state && visible<state.photos.length && <Button className="reference-link" disabled={busy} onClick={()=>setVisible(visible+12)}>更多照片（还有 {state.photos.length-visible} 张）</Button>}
       <Button className="reference-link" disabled={busy} onClick={()=>refresh()}>{busy?'核对中…':'重新核对'}</Button>
-    </View>}
+    </View>
   </View>;
 }

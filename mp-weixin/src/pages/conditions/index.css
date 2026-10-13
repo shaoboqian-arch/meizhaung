@@ -266,3 +266,5 @@
 .account-setting-body { padding:0 0 24px; }
 .account-setting-body .reference-photos { margin-top:0; padding-top:0; border-top:0; }
 .account-setting-body .cloud-note { color:#765f52; }
+
+.cloud-action { min-height:88px; padding:14px 18px; line-height:1.4; }
