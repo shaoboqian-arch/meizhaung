@@ -24,7 +24,14 @@ async function authorizeProductReview({ platformToken, processingToken, publisha
       headers: { Authorization: 'Bearer ' + platformToken, 'x-wb-webapp-access-key': publishableKey }
     });
   } catch { reject('PLATFORM_IDENTITY_UNAVAILABLE', 503); }
-  if (response.status === 401 || response.status === 403) { console.log('[ProductReview] platform deny http', response.status); reject('PLATFORM_SESSION_REJECTED', 401); }
+  if (response.status === 401 || response.status === 403) {
+    // 平台在 401/403 下仍返回 JSON 体：invalid_grant=会话层失效 / invalid_client=应用凭据错。
+    // 两者修复路径完全不同，落日志区分（体内容只含错误码与描述，无令牌）。
+    let denyDetail = '';
+    try { const denyJson = await response.json(); denyDetail = JSON.stringify({ error: denyJson.error, description: denyJson.error_description }); } catch { denyDetail = '(体不可解析)'; }
+    console.log('[ProductReview] platform deny http', response.status, denyDetail);
+    reject('PLATFORM_SESSION_REJECTED', 401);
+  }
   if (!response.ok) reject('PLATFORM_IDENTITY_UNAVAILABLE', 503);
   let raw;
   try { raw = await response.json(); } catch { reject('PLATFORM_IDENTITY_MALFORMED', 503); }
