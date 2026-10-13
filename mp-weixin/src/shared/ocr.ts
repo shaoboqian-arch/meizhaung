@@ -41,3 +41,15 @@ export const recognizeIngredientImage = async (savedFilePath: string): Promise<s
   }
   return parseOcrHttpResponse(response.statusCode, response.data);
 };
+
+// 从整张包装的 OCR 原文里提取备案"产品名称"与品牌建议（2026-10-13）。
+// 国产化妆品标签依规必须印"产品名称:"，是全文里最可靠的结构化锚点，取第一处；
+// 品牌用调用方给定的品牌名做最长前缀匹配（内置目录派生），匹配不到就留空——品牌宁缺勿错，始终可手改。
+export const extractLabelFields = (text: string, brands: string[]): { brand: string; model: string } => {
+  const nameMatch = text.match(/产品名称\s*[:：]\s*([^\n]+)/);
+  const model = nameMatch ? nameMatch[1].trim().slice(0, 40) : "";
+  if (!model) return { brand: "", model: "" };
+  const longest = [...brands].filter(Boolean).sort((a, b) => b.length - a.length)
+    .find((brand) => model.startsWith(brand));
+  return { brand: longest ?? "", model };
+};

@@ -2,7 +2,21 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import Taro from "@tarojs/taro";
 import { PROCESSING_SESSION_KEY } from "../src/shared/wxsession";
-import { OCR_ENDPOINT, parseOcrHttpResponse, recognizeIngredientImage } from "../src/shared/ocr";
+import { extractLabelFields, OCR_ENDPOINT, parseOcrHttpResponse, recognizeIngredientImage } from "../src/shared/ocr";
+
+test("标签字段提取：产品名称锚点 + 品牌最长前缀，无锚点留空", () => {
+  const tubeText = [
+    "L'ORÉAL MEN EXPERT BRIGHT REVIVE",
+    "欧莱雅男士耀白净油洗面奶",
+    "成分: 水、甘油、烟酰胺",
+    "产品名称:欧莱雅男士耀白净油洗面奶",
+    "净含量:50ml"
+  ].join("\n");
+  assert.deepEqual(extractLabelFields(tubeText, ["欧莱雅", "欧莱雅男士", "兰蔻"]), { brand: "欧莱雅男士", model: "欧莱雅男士耀白净油洗面奶" });
+  assert.deepEqual(extractLabelFields("产品名称：某品牌面霜", ["某品牌"]), { brand: "某品牌", model: "某品牌面霜" });
+  assert.deepEqual(extractLabelFields("产品名称:目录外新品水", ["欧莱雅"]), { brand: "", model: "目录外新品水" });
+  assert.deepEqual(extractLabelFields("没有锚点的包装文本", ["欧莱雅"]), { brand: "", model: "" });
+});
 
 test("OCR 响应解析：200 且有 text 时原样返回", () => {
   assert.equal(parseOcrHttpResponse(200, { ok: true, text: "Niacinamide\nCeramide NP", itemCount: 2 }), "Niacinamide\nCeramide NP");

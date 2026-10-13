@@ -2,13 +2,17 @@ import Taro, { useDidShow } from "@tarojs/taro";
 import { Button, Image, Input, Picker, Text, Textarea, View } from "@tarojs/components";
 import { useEffect, useRef, useState } from "react";
 import { categories } from "../../shared/constants";
-import { recognizeIngredientImage } from "../../shared/ocr";
+import { extractLabelFields, recognizeIngredientImage } from "../../shared/ocr";
+import { products as catalogProducts } from "@shared/data/catalog";
 import type { ProductDraft } from "../../shared/product-draft";
 import { readProductDraft, saveProductDraft, commitProductDraft, matchIngredients, getLocalScope, prepareReferencePhoto, attachReferencePhoto } from "../../shared/storage";
 import { assertDraftCurrent, assertRecognitionCurrent } from "../../shared/reference-photo";
 import { checkContentBeforeSave } from "../../shared/wxsession";
 import "../../shared/page.css";
 import "../products/index.css";
+
+// 品牌建议词表：由内置目录产品品牌派生，供标签提取做最长前缀匹配。
+const catalogBrandNames = [...new Set(catalogProducts.map((p) => p.brand))].filter(Boolean);
 
 export default function ProductAddPage() {
   const [draft, setDraft] = useState<ProductDraft | null>(null);
@@ -91,7 +95,12 @@ export default function ProductAddPage() {
       if (!current(request)) return;
       assertExpected(expected); assertRecognitionCurrent(currentDraft.current,expected);
       if (!text.trim()) { setError("没有识别到文字，请拍一张更清晰、正对成分表的照片，或手动粘贴。"); return; }
-      if (edit({ ingredientText:text },expected)) Taro.showToast({ title: `已识别 ${text.length} 字，请核对`, icon: "none" });
+      const fields = extractLabelFields(text, catalogBrandNames);
+      const patch: Partial<ProductDraft> = { ingredientText:text };
+      // 品牌/产品名仅在留空时按标签提取预填；用户已填内容一律不覆盖。
+      if (!expected.brand.trim() && fields.brand) patch.brand = fields.brand;
+      if (!expected.model.trim() && fields.model) patch.model = fields.model;
+      if (edit(patch,expected)) Taro.showToast({ title: fields.model ? "已识别成分与产品名称，请核对" : `已识别 ${text.length} 字，请核对`, icon: "none" });
     } catch (e) { report(e,request); }
     finally { finish(request); }
   };
